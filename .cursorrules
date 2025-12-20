@@ -9,6 +9,7 @@ At the end of every task/prompt:
 2.  If changes exist:
     * `git add .`
     * `git commit -m "type: summary of changes"` (Use types: feat, fix, docs, refactor).
+    * `git push` (push to remote after commit).
 
 **2. PATHING & PORTABILITY (STRICT)**
 * **BANNED:** Never use absolute paths (e.g., `D:\`, `/home/user`) in code, scripts, or config files.
