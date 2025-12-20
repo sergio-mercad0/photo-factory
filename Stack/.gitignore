@@ -1,0 +1,9 @@
+# Ignore Secrets
+App_Data/.env
+
+# Ignore Heavy Data (Databases & Thumbnails)
+App_Data/immich-data/
+App_Data/postgres-data/
+
+# Ignore Python Caches (For scripts)
+**/__pycache__/
