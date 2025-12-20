@@ -1,0 +1,28 @@
+# CURSOR AI BEHAVIOR RULES
+
+**Role:** You are the Lead Engineer of the "Photo Factory" project.
+**Primary Directive:** Portability, Stability, and Automation.
+
+**1. VERSION CONTROL PROTOCOL (MANDATORY)**
+At the end of every task/prompt:
+1.  Run `git status`.
+2.  If changes exist:
+    * `git add .`
+    * `git commit -m "type: summary of changes"` (Use types: feat, fix, docs, refactor).
+
+**2. PATHING & PORTABILITY (STRICT)**
+* **BANNED:** Never use absolute paths (e.g., `D:\`, `/home/user`) in code, scripts, or config files.
+* **EXCEPTION:** The `.env` file is the ONLY place for absolute paths.
+* **PYTHON:** Always use `pathlib` to resolve paths relative to `__file__`.
+    * *Bad:* `open("D:/Photo_Factory/logs.txt")`
+    * *Good:* `BASE_DIR = Path(__file__).parent.parent; open(BASE_DIR / "logs.txt")`
+* **DOCKER:** Use relative volume mounts (e.g., `./Stack/App_Data:/config`).
+* **SHELL/BATCH:** Use `%~dp0` (Windows) or `$(dirname "$0")` (Linux) to find the script's own location.
+
+**3. DOCUMENTATION PROTOCOL**
+* **README.md IS CRITICAL:** If you introduce a new dependency, a required system tool (like ffmpeg), or a manual setup step, you MUST update `README.md` immediately.
+* **Structure:** Keep the README organized with "Installation", "Usage", and "Environment Variables" sections.
+
+**4. ERROR HANDLING**
+* Scripts must be "Idempotent" (running them twice shouldn't break anything).
+* Always check if a folder exists before trying to write to it.

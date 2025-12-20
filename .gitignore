@@ -1,0 +1,55 @@
+# Environment and Secrets
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+*.cert
+
+# Data Directories (User-generated content)
+Stack/App_Data/immich-data/
+Stack/App_Data/postgres-data/
+Photos_Inbox/
+Photos_Gallery/
+
+# Homepage config (may contain sensitive data)
+Stack/App_Data/homepage/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
