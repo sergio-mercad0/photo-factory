@@ -70,3 +70,21 @@ Do you approve?"
     * **Collision:** Verify that a file with same name but different hash is renamed (e.g., `_copy_1`) and preserved.
     * **Read-Only:** Verify behavior if a destination file is locked (should retry or log error, not crash).
 * **Delivery:** Every Python module (e.g., `librarian.py`) must be delivered with a sibling test file (e.g., `tests/test_librarian.py`).
+
+**8. DOCKER STANDARDS**
+* **Strict Versioning:** NEVER use the `:latest` tag. Always pin base images to specific versions (e.g., `python:3.11-slim-bookworm`) to prevent future breakage.
+* **The "Build Gate" Protocol:**
+    * When designing `Dockerfiles` for services, prefer **Multi-Stage Builds**.
+    * *Stage 1 (Builder):* Install dependencies, copy code, and **RUN pytest** (MANDATORY).
+    * *Result:* If the tests fail during the build, the `docker build` command must fail. This prevents bad code from becoming a container.
+* **Runtime Health Checks (MANDATORY):**
+    * Every service must include a `healthcheck` in `docker-compose.yml`.
+    * The health check should run a lightweight test suite to verify the service is functioning.
+    * Health check command should run: `pytest Src/Librarian/tests/ --tb=short -q` (quiet mode for health checks).
+    * Health check interval: `30s`, timeout: `10s`, retries: `3`, start period: `40s`.
+    * *Result:* If health check fails, Docker will mark the container as unhealthy and can trigger restart policies.
+* **Layer Efficiency:** specific order is MANDATORY to use Docker caching:
+    1.  Copy `requirements.txt`.
+    2.  RUN pip install.
+    3.  Copy source code (`./Src/...`).
+    * *Why:* This prevents re-downloading libraries every time you fix a typo in your script.

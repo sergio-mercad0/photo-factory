@@ -94,8 +94,59 @@ No environment variables are required for the Librarian service. All paths are r
 
 - **watchdog** (>=3.0.0): File system event monitoring
 - **Pillow** (>=10.0.0): Image metadata extraction (EXIF)
+- **pytest** (>=7.0.0): Testing framework
 
 See `requirements.txt` for complete list.
+
+## Docker Deployment
+
+### Building the Librarian Service
+
+The Librarian service can be run in a Docker container with automatic testing:
+
+**Build the image (tests run during build):**
+```bash
+cd Stack/App_Data
+docker-compose build librarian
+```
+
+The build process will:
+1. Install dependencies
+2. Copy source code
+3. **Run pytest tests** (build fails if tests fail)
+4. Create minimal runtime image
+
+### Running with Docker Compose
+
+**Start all services including Librarian:**
+```bash
+cd Stack/App_Data
+docker-compose up -d librarian
+```
+
+**View logs:**
+```bash
+docker-compose logs -f librarian
+```
+
+**Check health status:**
+```bash
+docker-compose ps librarian
+```
+
+### Health Checks
+
+The Librarian service includes a health check that:
+- Runs every 30 seconds
+- Executes pytest tests to verify service functionality
+- Marks container as unhealthy if tests fail
+- Allows 40 seconds for initial startup
+
+Health check configuration:
+- **Interval**: 30s
+- **Timeout**: 10s
+- **Retries**: 3
+- **Start Period**: 40s
 
 ## Testing
 

@@ -67,5 +67,21 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     restart: always
 
+  librarian:
+    build:
+      context: ../../
+      dockerfile: Src/Librarian/Dockerfile
+    container_name: librarian
+    volumes:
+      - D:/Photo_Factory/Photos_Inbox:/app/Photos_Inbox
+      - D:/Photo_Factory/Storage:/app/Storage
+    restart: always
+    healthcheck:
+      test: ["CMD", "pytest", "Src/Librarian/tests/", "--tb=short", "-q"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
 volumes:
   model-cache:
