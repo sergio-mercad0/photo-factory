@@ -4,6 +4,7 @@ Librarian Ingest Service - Main entry point.
 Watches Photos_Inbox and organizes files into Storage/Originals/{YYYY}/{YYYY-MM-DD}/
 """
 import logging
+import shutil
 import signal
 import sys
 from pathlib import Path
@@ -135,8 +136,9 @@ class LibrarianService:
                         logger.error(f"Source file does not exist: {file_path}")
                         return
                     
-                    # Move file (atomic operation)
-                    file_path.rename(final_destination)
+                    # Move file (use shutil.move for cross-device support)
+                    # shutil.move handles both same-filesystem (rename) and cross-device (copy+delete) moves
+                    shutil.move(str(file_path), str(final_destination))
                     logger.info(
                         f"Moved file: {file_path.name} -> {final_destination}"
                     )
