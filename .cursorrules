@@ -9,7 +9,7 @@ At the end of every task/prompt:
 2.  If changes exist:
     * `git add .`
     * `git commit -m "type: summary of changes"` (Use types: feat, fix, docs, refactor).
-    * `git push` (push to remote after commit).
+    * `git push`
 
 **2. PATHING & PORTABILITY (STRICT)**
 * **BANNED:** Never use absolute paths (e.g., `D:\`, `/home/user`) in code, scripts, or config files.
@@ -33,6 +33,7 @@ The project root is the Git Root. All paths are relative to this:
 
 * **`./Src/`**: AUTOMATION CODE (Git Tracked)
     * `./Src/Librarian/`: The Python ingest service.
+        * `./Src/Librarian/tests/`: Unit and Integration tests for this service.
 * **`./Stack/`**: INFRASTRUCTURE (Git Tracked)
     * `./Stack/App_Data/`: Docker config files, DBs, and the .env file.
 * **`./Photos_Inbox/`**: INPUT (Git Ignored)
@@ -58,3 +59,14 @@ Before writing implementation code for critical systems, you must propose your c
 * Alternatives: [What else exists]
 * Pros/Cons: [Trade-offs]
 Do you approve?"
+
+**7. TESTING PROTOCOL (MANDATORY)**
+* **Location:** Tests must reside in a `tests/` subfolder within the specific service directory (e.g., `Src/Librarian/tests/`).
+* **Framework:** Use `pytest`.
+* **The "Sandbox" Rule:** Tests must NEVER touch the real `Photos_Inbox` or `Storage`. Always use the `tmp_path` fixture to create temporary source/destination directories for every test.
+* **Coverage Requirements:**
+    * **Happy Path:** Verify a standard file moves to the correct `YYYY-MM-DD` folder.
+    * **Deduplication:** Verify that an exact duplicate (same hash) is deleted from Inbox and logged.
+    * **Collision:** Verify that a file with same name but different hash is renamed (e.g., `_copy_1`) and preserved.
+    * **Read-Only:** Verify behavior if a destination file is locked (should retry or log error, not crash).
+* **Delivery:** Every Python module (e.g., `librarian.py`) must be delivered with a sibling test file (e.g., `tests/test_librarian.py`).

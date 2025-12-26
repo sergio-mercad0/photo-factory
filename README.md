@@ -97,6 +97,40 @@ No environment variables are required for the Librarian service. All paths are r
 
 See `requirements.txt` for complete list.
 
+## Testing
+
+### Running Tests
+
+The project includes a comprehensive pytest test suite located in `Src/Librarian/tests/`.
+
+**Run all tests:**
+```bash
+pytest Src/Librarian/tests/
+```
+
+**Run with verbose output:**
+```bash
+pytest Src/Librarian/tests/ -v
+```
+
+**Run specific test file:**
+```bash
+pytest Src/Librarian/tests/test_librarian_integration.py
+```
+
+### Test Coverage
+
+The test suite covers:
+- **Date Sorting**: Files organized into correct `YYYY/YYYY-MM-DD` folders
+- **Deduplication**: Identical files (same hash) are detected and deleted from inbox
+- **Name Collisions**: Files with same name but different content are renamed with `_1`, `_2` suffixes
+- **Metadata Extraction**: Date extraction from EXIF and file modification time fallback
+- **Hash Calculation**: SHA256 hashing for duplicate detection
+
+### Test Safety
+
+All tests use `tmp_path` fixtures and **never touch the real filesystem**. The `Photos_Inbox` and `Storage` directories are never modified during testing.
+
 ## Development
 
 ### Project Rules
@@ -114,6 +148,7 @@ See `.cursorrules` for detailed development guidelines, including:
 - `Src/Librarian/metadata_extractor.py`: EXIF/date extraction
 - `Src/Librarian/collision_handler.py`: Hash calculation and duplicate detection
 - `Src/Librarian/utils.py`: Path resolution and logging utilities
+- `Src/Librarian/tests/`: Comprehensive pytest test suite
 
 ## License
 

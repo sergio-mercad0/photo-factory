@@ -6,3 +6,6 @@ watchdog>=3.0.0
 # Image metadata extraction (EXIF)
 Pillow>=10.0.0
 
+# Testing
+pytest>=7.0.0
+
