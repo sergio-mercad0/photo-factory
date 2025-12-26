@@ -35,15 +35,21 @@ def mock_paths(monkeypatch, tmp_path: Path, tmp_inbox: Path, tmp_storage: Path):
     
     This allows tests to run without touching the real filesystem.
     """
+    # Import librarian module to patch the imported functions
+    from Src.Librarian import librarian
+    
     # Store original functions
     original_get_project_root = utils.get_project_root
     original_get_inbox_path = utils.get_inbox_path
     original_get_storage_path = utils.get_storage_path
     
-    # Override to use tmp_path
+    # Override in utils module
     monkeypatch.setattr(utils, "get_project_root", lambda: tmp_path)
     monkeypatch.setattr(utils, "get_inbox_path", lambda: tmp_inbox)
     monkeypatch.setattr(utils, "get_storage_path", lambda: tmp_storage)
+    
+    # Also override in librarian module (since it imports the functions directly)
+    monkeypatch.setattr(librarian, "get_storage_path", lambda: tmp_storage)
     
     yield {
         "project_root": tmp_path,

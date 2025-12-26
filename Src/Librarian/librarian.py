@@ -130,17 +130,22 @@ class LibrarianService:
                     # Ensure parent directory exists
                     ensure_directory_exists(final_destination.parent)
                     
+                    # Verify source file exists before moving
+                    if not file_path.exists():
+                        logger.error(f"Source file does not exist: {file_path}")
+                        return
+                    
                     # Move file (atomic operation)
                     file_path.rename(final_destination)
                     logger.info(
-                        f"Moved file: {file_path.name} -> "
-                        f"{final_destination.relative_to(self.storage_path.parent.parent)}"
+                        f"Moved file: {file_path.name} -> {final_destination}"
                     )
                     if reason != "No collision":
                         logger.info(f"Reason: {reason}")
                 
                 except OSError as e:
                     logger.error(f"Failed to move file {file_path.name}: {e}", exc_info=True)
+                    raise  # Re-raise to see the error in tests
         
         except Exception as e:
             logger.error(f"Error processing file {file_path.name}: {e}", exc_info=True)

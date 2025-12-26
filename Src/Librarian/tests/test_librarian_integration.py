@@ -21,6 +21,10 @@ class TestDateSorting:
         self, mock_paths, tmp_inbox: Path, tmp_storage: Path, create_test_file_with_date
     ):
         """Test that file is organized into correct YYYY/YYYY-MM-DD folder."""
+        # Verify mock_paths is working
+        from Src.Librarian import utils
+        assert utils.get_storage_path() == tmp_storage, "Mock paths not working correctly"
+        
         # Create a file with a specific date
         test_file = create_test_file_with_date(
             tmp_inbox,
@@ -35,15 +39,18 @@ class TestDateSorting:
         service = LibrarianService(
             stability_delay=0.1,
             min_file_age=0.1,
-            log_level="WARNING"  # Reduce log noise in tests
+            log_level="WARNING"  # Reduce log noise
         )
+        
+        # Verify service is using mocked storage path
+        assert service.storage_path == tmp_storage, f"Service using wrong storage path: {service.storage_path} != {tmp_storage}"
         
         # Process the file directly (bypass file watcher)
         service.process_file(test_file)
         
         # Verify file was moved to correct location
         expected_path = tmp_storage / "2025" / "2025-06-15" / "photo.jpg"
-        assert expected_path.exists(), f"File not found at {expected_path}"
+        assert expected_path.exists(), f"File not found at {expected_path}. Storage path: {service.storage_path}"
         assert not test_file.exists(), "Source file should be removed from inbox"
     
     def test_multiple_files_different_dates(
@@ -102,14 +109,16 @@ class TestDeduplication:
             log_level="WARNING"
         )
         
-        # Process first file
-        service.process_file(file1)
-        
-        # Verify first file moved to storage
+        # Extract date BEFORE processing (file will be moved)
         date_taken = extract_date_taken(file1)
         from Src.Librarian.metadata_extractor import get_date_path_components
         year, date_folder = get_date_path_components(date_taken)
         expected_path = tmp_storage / year / date_folder / "photo.jpg"
+        
+        # Process first file
+        service.process_file(file1)
+        
+        # Verify first file moved to storage
         assert expected_path.exists()
         
         # Create duplicate file (same content, same name)
@@ -142,13 +151,13 @@ class TestDeduplication:
             log_level="WARNING"
         )
         
-        # Process first file
-        service.process_file(file1)
-        
-        # Get destination folder
+        # Extract date BEFORE processing (file will be moved)
         date_taken = extract_date_taken(file1)
         year, date_folder = get_date_path_components(date_taken)
         dest_folder = tmp_storage / year / date_folder
+        
+        # Process first file
+        service.process_file(file1)
         
         # Create second file with different name but same content
         file2 = create_test_file(tmp_inbox, "photo2.jpg", content=content)
@@ -182,13 +191,13 @@ class TestNameCollision:
             log_level="WARNING"
         )
         
-        # Process first file
-        service.process_file(file1)
-        
-        # Get destination folder
+        # Extract date BEFORE processing (file will be moved)
         date_taken = extract_date_taken(file1)
         year, date_folder = get_date_path_components(date_taken)
         dest_folder = tmp_storage / year / date_folder
+        
+        # Process first file
+        service.process_file(file1)
         
         # Verify first file moved
         expected_path1 = dest_folder / "photo.jpg"
@@ -221,14 +230,17 @@ class TestNameCollision:
             log_level="WARNING"
         )
         
-        # Create and process first file
+        # Create first file
         file1 = create_test_file(tmp_inbox, "photo.jpg", content=b"content1")
-        service.process_file(file1)
         
+        # Extract date BEFORE processing (file will be moved)
         date_taken = extract_date_taken(file1)
         from Src.Librarian.metadata_extractor import get_date_path_components
         year, date_folder = get_date_path_components(date_taken)
         dest_folder = tmp_storage / year / date_folder
+        
+        # Process first file
+        service.process_file(file1)
         
         # Create and process second collision
         file2 = create_test_file(tmp_inbox, "photo.jpg", content=b"content2")
