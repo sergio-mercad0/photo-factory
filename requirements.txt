@@ -1,0 +1,8 @@
+# Librarian Ingest Service Dependencies
+
+# File watching
+watchdog>=3.0.0
+
+# Image metadata extraction (EXIF)
+Pillow>=10.0.0
+

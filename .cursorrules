@@ -27,3 +27,34 @@ At the end of every task/prompt:
 **4. ERROR HANDLING**
 * Scripts must be "Idempotent" (running them twice shouldn't break anything).
 * Always check if a folder exists before trying to write to it.
+
+**5. PROJECT TOPOGRAPHY (THE MAP)**
+The project root is the Git Root. All paths are relative to this:
+
+* **`./Src/`**: AUTOMATION CODE (Git Tracked)
+    * `./Src/Librarian/`: The Python ingest service.
+* **`./Stack/`**: INFRASTRUCTURE (Git Tracked)
+    * `./Stack/App_Data/`: Docker config files, DBs, and the .env file.
+* **`./Photos_Inbox/`**: INPUT (Git Ignored)
+    * Drop zone for Syncthing.
+* **`./Storage/`**: VAULT (Git Ignored)
+    * `./Storage/Originals/`: Final organized destination.
+
+**CRITICAL RULE:**
+* The `librarian.py` script lives in `Src`, but it reads/writes to `Photos_Inbox` and `Storage`.
+* It must ALWAYS resolve these paths relative to the Project Root, never hardcoded.
+
+**6. ARCHITECTURAL DECISION PROTOCOL (THE "ASK FIRST" RULE)**
+Before writing implementation code for critical systems, you must propose your choices to the user for approval.
+
+**Critical Decisions requiring Proposal:**
+1.  **Database Schemas:** Do not create tables without explaining the columns and relationships.
+2.  **Core Algorithms:** Explain *how* you intend to solve logic problems (e.g., "I will use SHA256 for collision detection because...").
+3.  **Libraries:** Explain *why* you chose a specific library (e.g., "Using `xxhash` instead of `hashlib` for speed").
+
+**Format:**
+"I propose using [Solution X].
+* Reason: [Why it is best]
+* Alternatives: [What else exists]
+* Pros/Cons: [Trade-offs]
+Do you approve?"
