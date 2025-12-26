@@ -34,7 +34,8 @@ class LibrarianService:
         self,
         stability_delay: float = 5.0,
         min_file_age: float = 2.0,
-        log_level: str = "INFO"
+        log_level: str = "INFO",
+        periodic_scan_interval: float = 60.0
     ):
         """
         Initialize Librarian service.
@@ -43,6 +44,7 @@ class LibrarianService:
             stability_delay: Seconds to wait after file modification before processing
             min_file_age: Minimum age of file before considering it stable
             log_level: Logging level
+            periodic_scan_interval: Seconds between periodic scans (fallback for missed files)
         """
         self.log_level = log_level
         setup_logging(log_level)
@@ -53,7 +55,8 @@ class LibrarianService:
         self.file_watcher = FileWatcher(
             self.process_file,
             stability_delay=stability_delay,
-            min_file_age=min_file_age
+            min_file_age=min_file_age,
+            periodic_scan_interval=periodic_scan_interval
         )
         
         self.running = False
@@ -230,13 +233,20 @@ def main():
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         help="Logging level (default: INFO)"
     )
+    parser.add_argument(
+        "--periodic-scan-interval",
+        type=float,
+        default=60.0,
+        help="Seconds between periodic scans (default: 60.0)"
+    )
     
     args = parser.parse_args()
     
     service = LibrarianService(
         stability_delay=args.stability_delay,
         min_file_age=args.min_file_age,
-        log_level=args.log_level
+        log_level=args.log_level,
+        periodic_scan_interval=args.periodic_scan_interval
     )
     
     service.run()
