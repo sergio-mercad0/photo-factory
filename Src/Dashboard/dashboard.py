@@ -336,6 +336,8 @@ def main():
             st.session_state.refresh_interval = 10
         if "refresh_key_counter" not in st.session_state:
             st.session_state.refresh_key_counter = 0
+        if "is_refreshing" not in st.session_state:
+            st.session_state.is_refreshing = False
         
         auto_refresh = st.checkbox("Auto-refresh", value=st.session_state.auto_refresh_enabled, key="auto_refresh_checkbox")
         refresh_interval = st.slider("Interval (sec)", 5, 60, st.session_state.refresh_interval, key="refresh_interval_slider")
@@ -350,19 +352,33 @@ def main():
         st.session_state.refresh_interval = refresh_interval
         
         if st.button("🔄 Refresh Now", key="refresh_button"):
-            # Clear cache and rerun
+            # Mark as refreshing and clear cache
+            st.session_state.is_refreshing = True
             st.cache_data.clear()
             st.rerun()
         
         # Use streamlit-autorefresh for reliable auto-refresh
         if auto_refresh:
             st.info(f"🔄 Auto-refreshing every {refresh_interval}s")
+            # Mark as refreshing before the refresh happens
+            # We'll detect the refresh by checking if this is a rerun
+            if st.session_state.get("last_rerun_time"):
+                time_since_rerun = (datetime.now() - st.session_state.last_rerun_time).total_seconds()
+                # If we're close to refresh time, mark as refreshing
+                if time_since_rerun >= refresh_interval * 0.9:
+                    st.session_state.is_refreshing = True
+            else:
+                st.session_state.last_rerun_time = datetime.now()
+            
             # Convert seconds to milliseconds for st_autorefresh
             # Use counter in key to force restart when interval changes
             st_autorefresh(
                 interval=refresh_interval * 1000, 
                 key=f"dashboard_refresh_{st.session_state.refresh_key_counter}"
             )
+            
+            # Update last rerun time after refresh
+            st.session_state.last_rerun_time = datetime.now()
     
     # Show service-specific or all services data
     if selected_service == "All Services":
@@ -383,7 +399,21 @@ def main():
         
         # All Services Status
         st.subheader("All Services Status")
-        services_status = get_all_services_status()
+        
+        # Get new data
+        new_services_status = get_all_services_status()
+        
+        # Preserve last known state if refreshing
+        if st.session_state.is_refreshing and "last_services_status" in st.session_state:
+            # Use last known state while refreshing
+            services_status = st.session_state.last_services_status
+            is_refreshing = True
+        else:
+            # Use new data and save it
+            services_status = new_services_status
+            st.session_state.last_services_status = new_services_status
+            is_refreshing = False
+            st.session_state.is_refreshing = False
         
         if services_status:
             # Create a table of all services
@@ -406,6 +436,10 @@ def main():
                 else:
                     status_indicator = "🔴 Not Running"
                 
+                # Add refreshing indicator if refreshing
+                if is_refreshing:
+                    status_indicator += " ⟳"
+                
                 # Heartbeat info
                 heartbeat_info = "N/A"
                 if svc["heartbeat"]:
@@ -417,6 +451,10 @@ def main():
                         heartbeat_info = f"🟡 {seconds_ago}s ago"
                     else:
                         heartbeat_info = f"🔴 {seconds_ago}s ago"
+                    
+                    # Add refreshing indicator if refreshing
+                    if is_refreshing:
+                        heartbeat_info += " ⟳"
                 
                 status_data.append({
                     "Service": svc["name"],
@@ -432,38 +470,58 @@ def main():
         
         st.markdown("---")
         
-        # Overall Statistics - use empty containers for smoother updates
+        # Overall Statistics - preserve last known state while refreshing
         st.subheader("Overall Statistics")
         stats_container = st.container()
         with stats_container:
             col1, col2, col3, col4 = st.columns(4)
             
+            # Get new data
+            new_total_assets = get_total_assets()
+            new_assets_last_hour = get_assets_last_hour()
+            new_heartbeat = get_librarian_heartbeat()
+            
+            # Preserve last known state if refreshing
+            if st.session_state.is_refreshing:
+                total_assets = st.session_state.get("last_total_assets", new_total_assets)
+                assets_last_hour = st.session_state.get("last_assets_last_hour", new_assets_last_hour)
+                heartbeat = st.session_state.get("last_heartbeat", new_heartbeat)
+                refresh_indicator = " ⟳"
+            else:
+                # Save new data
+                total_assets = new_total_assets
+                assets_last_hour = new_assets_last_hour
+                heartbeat = new_heartbeat
+                st.session_state.last_total_assets = new_total_assets
+                st.session_state.last_assets_last_hour = new_assets_last_hour
+                st.session_state.last_heartbeat = new_heartbeat
+                refresh_indicator = ""
+            
             with col1:
-                st.metric("Total Assets Secured", f"{get_total_assets():,}")
+                st.metric("Total Assets Secured", f"{total_assets:,}{refresh_indicator}")
             
             with col2:
-                st.metric("Processed Last Hour", f"{get_assets_last_hour():,}")
+                st.metric("Processed Last Hour", f"{assets_last_hour:,}{refresh_indicator}")
             
             with col3:
                 remaining = get_remaining_files()
                 if remaining is not None:
-                    st.metric("Remaining in Inbox", f"{remaining:,}")
+                    st.metric("Remaining in Inbox", f"{remaining:,}{refresh_indicator}")
                 else:
-                    st.metric("Remaining in Inbox", "N/A")
+                    st.metric("Remaining in Inbox", f"N/A{refresh_indicator}")
             
             with col4:
-                heartbeat = get_librarian_heartbeat()
                 if heartbeat:
                     time_since = datetime.now() - heartbeat["last_heartbeat"]
                     seconds_ago = int(time_since.total_seconds())
                     if seconds_ago <= 60:
-                        st.metric("Librarian Heartbeat", f"🟢 {seconds_ago}s ago")
+                        st.metric("Librarian Heartbeat", f"🟢 {seconds_ago}s ago{refresh_indicator}")
                     elif seconds_ago <= 180:
-                        st.metric("Librarian Heartbeat", f"🟡 {seconds_ago}s ago")
+                        st.metric("Librarian Heartbeat", f"🟡 {seconds_ago}s ago{refresh_indicator}")
                     else:
-                        st.metric("Librarian Heartbeat", f"🔴 {seconds_ago}s ago")
+                        st.metric("Librarian Heartbeat", f"🔴 {seconds_ago}s ago{refresh_indicator}")
                 else:
-                    st.metric("Librarian Heartbeat", "N/A")
+                    st.metric("Librarian Heartbeat", f"N/A{refresh_indicator}")
         
         st.markdown("---")
         
