@@ -11,7 +11,9 @@ Photo_Factory/
 │       └── librarian.py    # Main ingest service
 ├── Stack/                  # Infrastructure (Git Tracked)
 │   └── App_Data/           # Docker configs, databases, .env
+│       └── syncthing_config/  # Syncthing configuration (created on first run)
 ├── Photos_Inbox/           # Input drop zone (Git Ignored)
+│                           # Syncthing syncs files here → Librarian processes them
 └── Storage/                # Vault (Git Ignored)
     └── Originals/          # Organized photos by date
 ```
@@ -100,6 +102,14 @@ See `requirements.txt` for complete list.
 
 ## Docker Deployment
 
+The Photo Factory stack includes multiple services managed via Docker Compose:
+
+- **Librarian**: Automated photo ingestion and organization service
+- **Syncthing**: File synchronization service for receiving photos from remote devices
+- **Immich**: Photo gallery and management (optional)
+- **PostgreSQL**: Database for Immich
+- **Redis**: Cache for Immich
+
 ### Building the Librarian Service
 
 The Librarian service can be run in a Docker container with automatic testing:
@@ -118,21 +128,52 @@ The build process will:
 
 ### Running with Docker Compose
 
-**Start all services including Librarian:**
+**Start all services:**
 ```bash
 cd Stack/App_Data
+docker-compose up -d
+```
+
+**Start specific service:**
+```bash
 docker-compose up -d librarian
+docker-compose up -d syncthing
 ```
 
 **View logs:**
 ```bash
 docker-compose logs -f librarian
+docker-compose logs -f syncthing
 ```
 
 **Check health status:**
 ```bash
-docker-compose ps librarian
+docker-compose ps
 ```
+
+### Syncthing Service
+
+Syncthing provides file synchronization capabilities, allowing remote devices to sync photos directly to `Photos_Inbox`.
+
+**Configuration:**
+- **Web GUI**: Access at `http://localhost:8384`
+- **Config Directory**: `Stack/App_Data/syncthing_config/` (created automatically)
+- **Inbox Folder**: Syncthing syncs files to `Photos_Inbox/` which is monitored by the Librarian service
+- **Image Version**: `syncthing/syncthing:1.27` (pinned for stability)
+
+**Ports:**
+- `8384`: Web GUI
+- `22000/tcp` & `22000/udp`: Sync traffic
+- `21027/udp`: Local device discovery
+
+**Initial Setup:**
+1. Start the service: `docker-compose up -d syncthing`
+2. Access the web GUI at `http://localhost:8384`
+3. Configure folders and add remote devices through the web interface
+4. Set the "Inbox" folder to sync to your remote devices
+
+**Integration:**
+Files synced to `Photos_Inbox/` are automatically detected and processed by the Librarian service, which organizes them into `Storage/Originals/{YYYY}/{YYYY-MM-DD}/`.
 
 ### Health Checks
 
