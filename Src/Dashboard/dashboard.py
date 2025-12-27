@@ -162,6 +162,30 @@ def get_service_heartbeat(service_name: str) -> Optional[dict]:
         return None
 
 
+def get_all_services_status() -> list:
+    """Get status for all available services."""
+    services_status = []
+    
+    if not DOCKER_AVAILABLE:
+        return services_status
+    
+    available_services = get_available_services()
+    
+    for service_name in available_services:
+        container_status = get_container_status(service_name)
+        heartbeat = get_service_heartbeat(service_name.split("_")[0] if "_" in service_name else service_name)
+        
+        status_info = {
+            "name": service_name,
+            "container_running": container_status["running"] if container_status else False,
+            "container_health": container_status.get("health", "unknown") if container_status else "unknown",
+            "heartbeat": heartbeat,
+        }
+        services_status.append(status_info)
+    
+    return services_status
+
+
 def get_available_services() -> list:
     """Get list of available Docker services."""
     if not DOCKER_AVAILABLE:
@@ -296,18 +320,67 @@ def main():
     if selected_service == "All Services":
         # Show overview for all services
         st.subheader("System Overview")
-        status_col1, status_col2, status_col3 = st.columns(3)
         
-        with status_col1:
+        # Infrastructure status
+        infra_col1, infra_col2 = st.columns(2)
+        with infra_col1:
             db_status = "🟢 Connected" if db_connected else "🔴 Disconnected"
             st.write(f"**Database:** {db_status}")
         
-        with status_col2:
+        with infra_col2:
             docker_status = "🟢 Available" if DOCKER_AVAILABLE else "🔴 Unavailable"
             st.write(f"**Docker:** {docker_status}")
         
-        with status_col3:
-            st.write(f"**Services Available:** {len(available_services)}")
+        st.markdown("---")
+        
+        # All Services Status
+        st.subheader("All Services Status")
+        services_status = get_all_services_status()
+        
+        if services_status:
+            # Create a table of all services
+            try:
+                import pandas as pd
+            except ImportError:
+                st.error("pandas not available")
+                return
+            
+            status_data = []
+            for svc in services_status:
+                # Determine status indicator
+                if svc["container_running"]:
+                    if svc["container_health"] == "healthy":
+                        status_indicator = "🟢 Healthy"
+                    elif svc["container_health"] == "unhealthy":
+                        status_indicator = "🔴 Unhealthy"
+                    else:
+                        status_indicator = f"🟡 {svc['container_health']}"
+                else:
+                    status_indicator = "🔴 Not Running"
+                
+                # Heartbeat info
+                heartbeat_info = "N/A"
+                if svc["heartbeat"]:
+                    time_since = datetime.now() - svc["heartbeat"]["last_heartbeat"]
+                    seconds_ago = int(time_since.total_seconds())
+                    if seconds_ago < 30:
+                        heartbeat_info = f"🟢 {seconds_ago}s ago"
+                    elif seconds_ago < 120:
+                        heartbeat_info = f"🟡 {seconds_ago}s ago"
+                    else:
+                        heartbeat_info = f"🔴 {seconds_ago}s ago"
+                
+                status_data.append({
+                    "Service": svc["name"],
+                    "Status": status_indicator,
+                    "Heartbeat": heartbeat_info,
+                    "Current Task": svc["heartbeat"].get("current_task", "N/A") if svc["heartbeat"] else "N/A",
+                })
+            
+            df = pd.DataFrame(status_data)
+            st.dataframe(df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No services found or Docker unavailable")
         
         st.markdown("---")
         

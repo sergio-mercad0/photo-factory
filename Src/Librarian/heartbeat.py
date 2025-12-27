@@ -60,9 +60,10 @@ class HeartbeatService:
                     session.add(status_record)
                 
                 # Update fields
+                from datetime import datetime
                 status_record.status = self.status
                 status_record.current_task = self.current_task
-                # last_heartbeat is auto-updated by database (onupdate=func.now())
+                status_record.last_heartbeat = datetime.now()  # Explicitly update heartbeat timestamp
                 
                 session.commit()
                 logger.debug(f"Heartbeat updated: {self.service_name} - {self.status}")
