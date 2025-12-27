@@ -23,8 +23,8 @@ COPY Src/ ./Src/
 # Set PYTHONPATH so imports work correctly
 ENV PYTHONPATH=/build
 
-# Run tests if they exist (optional for dashboard)
-# RUN pytest Src/Dashboard/tests/ -v --tb=short || true
+# Run tests (MANDATORY - per Build Gate Protocol)
+RUN pytest Src/Dashboard/tests/ -v --tb=short
 
 # Stage 2: Runtime (minimal image)
 FROM python:3.11-slim-bookworm
