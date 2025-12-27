@@ -1,0 +1,17 @@
+=============== Dec 27, 2025 (UTC) ===============
+00:31:06.190068 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+00:31:06.218483 db@open opening
+00:31:06.220356 version@stat F·[] S·0B[] Sc·[]
+00:31:06.230334 db@janitor F·2 G·0
+00:31:06.230459 db@open done T·11.749431ms
+00:31:06.693184 memdb@flush N·49 S·1KiB
+00:31:06.700993 memdb@flush created L0@3 N·49 S·611B "\ndb..ion,v49":"\nla..ime,v19"
+00:31:06.701131 version@stat F·[1] S·611B[611B] Sc·[0.25]
+00:31:06.711975 memdb@flush committed F·1 T·18.575029ms
+00:31:06.712576 journal@remove removed @1
+00:31:06.713146 table@compaction range L-1 "":""
+00:31:06.713234 table@compaction L0·1 -> L1·0 S·611B Q·49
+00:31:06.723552 table@build created L1@4 N·4 S·207B "\ndb..ion,v49":"\nla..ime,v19"
+00:31:06.723662 version@stat F·[0 1] S·207B[0B 207B] Sc·[0.00 0.00]
+00:31:06.733281 table@compaction committed F~ S-404B Ke·0 D·45 T·19.909927ms
+00:31:06.734024 table@remove removed @3

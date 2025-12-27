@@ -1,4 +1,4 @@
-# Librarian Ingest Service Dependencies
+# Photo Factory Dependencies
 
 # File watching
 watchdog>=3.0.0
@@ -6,6 +6,20 @@ watchdog>=3.0.0
 # Image metadata extraction (EXIF)
 Pillow>=10.0.0
 
+# Metadata extraction (comprehensive - images, videos, RAW)
+PyExifTool>=0.5.0
+
+# Database (Shared)
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.0
+
 # Testing
 pytest>=7.0.0
+
+# Dashboard (Streamlit)
+streamlit>=1.28.0
+pandas>=2.0.0
+
+# Docker API for dashboard
+docker>=6.1.0
 

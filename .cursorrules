@@ -118,7 +118,7 @@ Do you approve?"
     * *Rationale:* Health checks detect container failures, not application logic. Full test suites belong in CI/CD, not runtime health checks.
     * *Application Monitoring:*
         * **Real-time Status:** Dashboard polls Docker directly (via Docker API or `docker ps`) for current container status. Docker is the source of truth for "is service running now".
-        * **Historical Status:** Services update `system_status` table periodically (1-5 minutes) for historical trends, metrics, and offline analysis. Database stores past heartbeats and operational data.
+        * **Historical Status:** Services update `system_status` table periodically (5-10 minutes) for historical trends, metrics, and offline analysis. Database stores past heartbeats and operational data.
         * *Separation:* Real-time = Docker, Historical = Database.
 * **Layer Efficiency:** specific order is MANDATORY to use Docker caching:
     1.  Copy `requirements.txt`.

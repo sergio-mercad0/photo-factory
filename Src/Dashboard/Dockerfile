@@ -1,15 +1,13 @@
-# Multi-stage build for Librarian Ingest Service
+# Multi-stage build for Dashboard service
 # Build context should be project root (D:\Photo_Factory)
 # Stage 1: Builder (runs tests)
 FROM python:3.11-slim-bookworm AS builder
 
 WORKDIR /build
 
-# Install system dependencies (for exiftool)
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
-    libexiftool-dev \
-    libimage-exiftool-perl \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
@@ -19,25 +17,22 @@ COPY requirements.txt .
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy source code (Shared and Librarian)
-COPY Src/Shared/ ./Src/Shared/
-COPY Src/Librarian/ ./Src/Librarian/
+# Copy source code
+COPY Src/ ./Src/
 
 # Set PYTHONPATH so imports work correctly
 ENV PYTHONPATH=/build
 
-# Run tests (MANDATORY - build fails if tests fail)
-RUN pytest Src/Librarian/tests/ -v --tb=short
+# Run tests if they exist (optional for dashboard)
+# RUN pytest Src/Dashboard/tests/ -v --tb=short || true
 
 # Stage 2: Runtime (minimal image)
 FROM python:3.11-slim-bookworm
 
 WORKDIR /app
 
-# Install runtime dependencies (exiftool for metadata extraction)
+# Install runtime dependencies
 RUN apt-get update && apt-get install -y \
-    libexiftool-dev \
-    libimage-exiftool-perl \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
@@ -45,19 +40,22 @@ RUN apt-get update && apt-get install -y \
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Copy source code (Shared and Librarian)
-COPY Src/Shared/ ./Src/Shared/
-COPY Src/Librarian/ ./Src/Librarian/
+# Copy source code
+COPY Src/ ./Src/
 COPY requirements.txt .
 
 # Set PYTHONPATH for runtime
 ENV PYTHONPATH=/app
 
 # Create non-root user for security
-RUN useradd -m -u 1000 librarian && \
-    chown -R librarian:librarian /app
+RUN useradd -m -u 1000 dashboard && \
+    chown -R dashboard:dashboard /app
 
-USER librarian
+USER dashboard
 
-# Default command runs the service
-CMD ["python", "-m", "Src.Librarian.librarian"]
+# Expose Streamlit port
+EXPOSE 8501
+
+# Default command runs Streamlit
+CMD ["streamlit", "run", "Src/Dashboard/dashboard.py", "--server.port=8501", "--server.address=0.0.0.0"]
+

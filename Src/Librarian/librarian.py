@@ -7,7 +7,11 @@ import logging
 import shutil
 import signal
 import sys
+from datetime import datetime
 from pathlib import Path
+
+from Shared.database import get_db_session, init_database, check_database_connection
+from Shared.models import MediaAsset
 
 from .collision_handler import (
     calculate_file_hash,
@@ -15,7 +19,8 @@ from .collision_handler import (
     handle_collision,
 )
 from .file_watcher import FileWatcher
-from .metadata_extractor import extract_date_taken, get_date_path_components
+from .heartbeat import HeartbeatService
+from .metadata_extractor import extract_metadata, get_date_path_components
 from .utils import (
     ensure_directory_exists,
     get_storage_path,
@@ -36,7 +41,8 @@ class LibrarianService:
         stability_delay: float = 5.0,
         min_file_age: float = 2.0,
         log_level: str = "INFO",
-        periodic_scan_interval: float = 60.0
+        periodic_scan_interval: float = 60.0,
+        heartbeat_interval: float = 60.0
     ):
         """
         Initialize Librarian service.
@@ -46,12 +52,28 @@ class LibrarianService:
             min_file_age: Minimum age of file before considering it stable
             log_level: Logging level
             periodic_scan_interval: Seconds between periodic scans (fallback for missed files)
+            heartbeat_interval: Seconds between heartbeat updates (default: 60s = 1 minute)
         """
         self.log_level = log_level
         setup_logging(log_level)
         
+        # Initialize database
+        logger.info("Initializing database...")
+        try:
+            init_database()
+            if check_database_connection():
+                logger.info("Database connection successful")
+            else:
+                logger.warning("Database connection check failed, but continuing...")
+        except Exception as e:
+            logger.error(f"Database initialization failed: {e}", exc_info=True)
+            logger.warning("Continuing without database (files will still be processed)")
+        
         self.storage_path = get_storage_path()
         ensure_directory_exists(self.storage_path)
+        
+        # Initialize heartbeat service
+        self.heartbeat = HeartbeatService(service_name="librarian", interval=heartbeat_interval)
         
         self.file_watcher = FileWatcher(
             self.process_file,
@@ -76,11 +98,18 @@ class LibrarianService:
         
         logger.info(f"Processing file: {file_path.name}")
         
+        # Update heartbeat with current task
+        self.heartbeat.set_current_task(f"Processing {file_path.name}")
+        
         try:
-            # Extract date taken
-            date_taken = extract_date_taken(file_path)
+            # Extract comprehensive metadata (date and location)
+            metadata = extract_metadata(file_path)
+            date_taken = metadata.get("captured_at")
+            location = metadata.get("location")
+            
             if not date_taken:
                 logger.error(f"Could not extract date from {file_path.name}")
+                self.heartbeat.set_current_task(None)
                 return
             
             # Get destination path components
@@ -153,6 +182,25 @@ class LibrarianService:
                     )
                     if reason != "No collision":
                         logger.info(f"Reason: {reason}")
+                    
+                    # Write to database (after successful move)
+                    # If DB fails, log error but don't lose the file (already moved)
+                    try:
+                        self._write_to_database(
+                            file_hash=file_hash,
+                            original_name=file_path.name,
+                            original_path=str(file_path),
+                            final_path=str(final_destination),
+                            size_bytes=final_destination.stat().st_size,
+                            captured_at=date_taken,
+                            location=location
+                        )
+                    except Exception as db_error:
+                        logger.error(
+                            f"Failed to write {file_path.name} to database: {db_error}",
+                            exc_info=True
+                        )
+                        # Don't fail the entire operation - file is already moved
                 
                 except OSError as e:
                     logger.error(f"Failed to move file {file_path.name}: {e}", exc_info=True)
@@ -160,6 +208,63 @@ class LibrarianService:
         
         except Exception as e:
             logger.error(f"Error processing file {file_path.name}: {e}", exc_info=True)
+            self.heartbeat.set_status("ERROR")
+        finally:
+            # Clear current task
+            self.heartbeat.set_current_task(None)
+            self.heartbeat.set_status("OK")
+    
+    def _write_to_database(
+        self,
+        file_hash: str,
+        original_name: str,
+        original_path: str,
+        final_path: str,
+        size_bytes: int,
+        captured_at: datetime,
+        location: dict = None
+    ):
+        """
+        Write media asset to database.
+        
+        Args:
+            file_hash: SHA256 hash of file
+            original_name: Original filename
+            original_path: Full path in Photos_Inbox
+            final_path: Full path in Storage/Originals
+            size_bytes: File size in bytes
+            captured_at: Date taken from metadata
+            location: GPS coordinates dict or None
+        """
+        try:
+            with get_db_session() as session:
+                # Check if asset already exists (by hash)
+                existing = session.query(MediaAsset).filter(
+                    MediaAsset.file_hash == file_hash
+                ).first()
+                
+                if existing:
+                    logger.debug(f"Asset already in database: {file_hash[:8]}...")
+                    return
+                
+                # Create new asset record
+                asset = MediaAsset(
+                    file_hash=file_hash,
+                    original_name=original_name,
+                    original_path=original_path,
+                    final_path=final_path,
+                    size_bytes=size_bytes,
+                    captured_at=captured_at,
+                    location=location
+                )
+                
+                session.add(asset)
+                session.commit()
+                logger.debug(f"Asset written to database: {original_name}")
+        
+        except Exception as e:
+            logger.error(f"Database write failed: {e}", exc_info=True)
+            raise
     
     def start(self):
         """Start the service."""
@@ -171,6 +276,11 @@ class LibrarianService:
         logger.info(f"Storage path: {self.storage_path}")
         
         self.running = True
+        
+        # Start heartbeat service
+        self.heartbeat.start()
+        
+        # Start file watcher
         self.file_watcher.start()
         
         # Process any existing files
@@ -185,7 +295,13 @@ class LibrarianService:
         
         logger.info("Stopping Librarian service...")
         self.running = False
+        
+        # Stop file watcher
         self.file_watcher.stop()
+        
+        # Stop heartbeat service
+        self.heartbeat.stop()
+        
         logger.info("Librarian service stopped.")
     
     def run(self):

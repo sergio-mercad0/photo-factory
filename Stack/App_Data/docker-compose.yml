@@ -67,21 +67,49 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     restart: always
 
+  # Photo Factory Database (separate from Immich)
+  factory-db:
+    container_name: factory_postgres
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_PASSWORD: ${FACTORY_DB_PASSWORD:-photo_factory}
+      POSTGRES_USER: ${FACTORY_DB_USER:-photo_factory}
+      POSTGRES_DB: ${FACTORY_DB_NAME:-photo_factory}
+    volumes:
+      - D:/Photo_Factory/Stack/App_Data/factory-db-data:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${FACTORY_DB_USER:-photo_factory}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   librarian:
     build:
-      context: ../../
+      context: ../../ 
       dockerfile: Src/Librarian/Dockerfile
     container_name: librarian
+    environment:
+      DATABASE_URL: postgresql://${FACTORY_DB_USER:-photo_factory}:${FACTORY_DB_PASSWORD:-photo_factory}@factory-db:5432/${FACTORY_DB_NAME:-photo_factory}
+      DB_HOST: factory-db
+      DB_PORT: 5432
+      DB_USERNAME: ${FACTORY_DB_USER:-photo_factory}
+      DB_PASSWORD: ${FACTORY_DB_PASSWORD:-photo_factory}
+      DB_DATABASE_NAME: ${FACTORY_DB_NAME:-photo_factory}
     volumes:
       - D:/Photo_Factory/Photos_Inbox:/app/Photos_Inbox
       - D:/Photo_Factory/Storage:/app/Storage
+    depends_on:
+      factory-db:
+        condition: service_healthy
     restart: always
     healthcheck:
-      test: ["CMD", "pytest", "Src/Librarian/tests/", "--tb=short", "-q"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 2m
+      timeout: 5s
+      retries: 2
+      start_period: 60s
 
   syncthing:
     image: syncthing/syncthing:1.27
@@ -98,10 +126,37 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8384/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      interval: 2m
+      timeout: 5s
+      retries: 2
+      start_period: 60s
+
+  dashboard:
+    build:
+      context: ../../
+      dockerfile: Src/Dashboard/Dockerfile
+    container_name: dashboard
+    environment:
+      DATABASE_URL: postgresql://${FACTORY_DB_USER:-photo_factory}:${FACTORY_DB_PASSWORD:-photo_factory}@factory-db:5432/${FACTORY_DB_NAME:-photo_factory}
+      DB_HOST: factory-db
+      DB_PORT: 5432
+      DB_USERNAME: ${FACTORY_DB_USER:-photo_factory}
+      DB_PASSWORD: ${FACTORY_DB_PASSWORD:-photo_factory}
+      DB_DATABASE_NAME: ${FACTORY_DB_NAME:-photo_factory}
+    ports:
+      - 8501:8501
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      factory-db:
+        condition: service_healthy
+    restart: always
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 2m
+      timeout: 5s
+      retries: 2
+      start_period: 60s
 
 volumes:
   model-cache:
