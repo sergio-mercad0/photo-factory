@@ -177,17 +177,19 @@ Files synced to `Photos_Inbox/` are automatically detected and processed by the 
 
 ### Health Checks
 
-The Librarian service includes a health check that:
-- Runs every 30 seconds
-- Executes pytest tests to verify service functionality
-- Marks container as unhealthy if tests fail
-- Allows 40 seconds for initial startup
+All services include health checks to verify they are functioning correctly:
 
-Health check configuration:
-- **Interval**: 30s
-- **Timeout**: 10s
-- **Retries**: 3
-- **Start Period**: 40s
+**Librarian Service:**
+- Runs pytest tests to verify service functionality
+- Health check: `pytest Src/Librarian/tests/ --tb=short -q`
+- Interval: 30s, Timeout: 10s, Retries: 3, Start Period: 40s
+
+**Syncthing Service:**
+- Verifies web UI is responding on port 8384
+- Health check: `wget --spider http://localhost:8384/`
+- Interval: 30s, Timeout: 10s, Retries: 3, Start Period: 40s
+
+If a health check fails, Docker marks the container as unhealthy and can trigger restart policies.
 
 ## Testing
 
