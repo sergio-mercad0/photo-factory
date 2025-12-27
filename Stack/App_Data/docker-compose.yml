@@ -83,5 +83,19 @@ services:
       retries: 3
       start_period: 40s
 
+  syncthing:
+    image: syncthing/syncthing:1.27
+    container_name: syncthing
+    hostname: factory-syncthing
+    ports:
+      - 8384:8384
+      - 22000:22000/tcp
+      - 22000:22000/udp
+      - 21027:21027/udp
+    volumes:
+      - ./syncthing_config:/var/syncthing/config
+      - ../../Photos_Inbox:/var/syncthing/Inbox
+    restart: unless-stopped
+
 volumes:
   model-cache:
