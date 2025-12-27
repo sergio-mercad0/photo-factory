@@ -324,9 +324,16 @@ def main():
             st.session_state.auto_refresh_enabled = True
         if "refresh_interval" not in st.session_state:
             st.session_state.refresh_interval = 10
+        if "refresh_key_counter" not in st.session_state:
+            st.session_state.refresh_key_counter = 0
         
         auto_refresh = st.checkbox("Auto-refresh", value=st.session_state.auto_refresh_enabled, key="auto_refresh_checkbox")
         refresh_interval = st.slider("Interval (sec)", 5, 60, st.session_state.refresh_interval, key="refresh_interval_slider")
+        
+        # Check if interval changed - if so, increment counter to force refresh component restart
+        if refresh_interval != st.session_state.get("last_refresh_interval", refresh_interval):
+            st.session_state.refresh_key_counter += 1
+        st.session_state.last_refresh_interval = refresh_interval
         
         # Update session state when values change
         st.session_state.auto_refresh_enabled = auto_refresh
@@ -341,7 +348,11 @@ def main():
         if auto_refresh:
             st.info(f"🔄 Auto-refreshing every {refresh_interval}s")
             # Convert seconds to milliseconds for st_autorefresh
-            st_autorefresh(interval=refresh_interval * 1000, key="dashboard_refresh")
+            # Use counter in key to force restart when interval changes
+            st_autorefresh(
+                interval=refresh_interval * 1000, 
+                key=f"dashboard_refresh_{st.session_state.refresh_key_counter}"
+            )
     
     # Show service-specific or all services data
     if selected_service == "All Services":
@@ -390,9 +401,9 @@ def main():
                 if svc["heartbeat"]:
                     time_since = datetime.now() - svc["heartbeat"]["last_heartbeat"]
                     seconds_ago = int(time_since.total_seconds())
-                    if seconds_ago < 30:
+                    if seconds_ago <= 60:
                         heartbeat_info = f"🟢 {seconds_ago}s ago"
-                    elif seconds_ago < 120:
+                    elif seconds_ago <= 180:
                         heartbeat_info = f"🟡 {seconds_ago}s ago"
                     else:
                         heartbeat_info = f"🔴 {seconds_ago}s ago"
@@ -432,7 +443,13 @@ def main():
             heartbeat = get_librarian_heartbeat()
             if heartbeat:
                 time_since = datetime.now() - heartbeat["last_heartbeat"]
-                st.metric("Librarian Heartbeat", f"{int(time_since.total_seconds())}s ago")
+                seconds_ago = int(time_since.total_seconds())
+                if seconds_ago <= 60:
+                    st.metric("Librarian Heartbeat", f"🟢 {seconds_ago}s ago")
+                elif seconds_ago <= 180:
+                    st.metric("Librarian Heartbeat", f"🟡 {seconds_ago}s ago")
+                else:
+                    st.metric("Librarian Heartbeat", f"🔴 {seconds_ago}s ago")
             else:
                 st.metric("Librarian Heartbeat", "N/A")
         
@@ -508,12 +525,13 @@ def main():
             heartbeat = get_service_heartbeat(selected_service.split("_")[0] if "_" in selected_service else selected_service)
             if heartbeat:
                 time_since = datetime.now() - heartbeat["last_heartbeat"]
-                if time_since.total_seconds() < 30:
-                    st.success(f"💓 Heartbeat: {int(time_since.total_seconds())}s ago")
-                elif time_since.total_seconds() < 120:
-                    st.warning(f"💓 Heartbeat: {int(time_since.total_seconds())}s ago")
+                seconds_ago = int(time_since.total_seconds())
+                if seconds_ago <= 60:
+                    st.success(f"💓 Heartbeat: {seconds_ago}s ago")
+                elif seconds_ago <= 180:
+                    st.warning(f"💓 Heartbeat: {seconds_ago}s ago")
                 else:
-                    st.error(f"💓 Heartbeat: {int(time_since.total_seconds())}s ago")
+                    st.error(f"💓 Heartbeat: {seconds_ago}s ago")
                 
                 if heartbeat.get("current_task"):
                     st.caption(f"Current Task: {heartbeat['current_task']}")
