@@ -286,12 +286,22 @@ def get_all_logs(services: list, tail: int = 100) -> str:
 
 def main():
     """Main dashboard function."""
-    # Set page title via JavaScript to prevent flickering
+    # Set page title and add CSS to reduce visual flash
     st.markdown(
         """
         <script>
         document.title = "Photo Factory Dashboard";
         </script>
+        <style>
+        /* Reduce visual flash during refresh */
+        .stApp {
+            transition: opacity 0.15s ease-in-out;
+        }
+        /* Smooth transitions for metrics */
+        [data-testid="stMetricValue"] {
+            transition: opacity 0.1s ease-in-out;
+        }
+        </style>
         """,
         unsafe_allow_html=True
     )
@@ -422,79 +432,82 @@ def main():
         
         st.markdown("---")
         
-        # Overall Statistics
+        # Overall Statistics - use empty containers for smoother updates
         st.subheader("Overall Statistics")
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric("Total Assets Secured", f"{get_total_assets():,}")
-        
-        with col2:
-            st.metric("Processed Last Hour", f"{get_assets_last_hour():,}")
-        
-        with col3:
-            remaining = get_remaining_files()
-            if remaining is not None:
-                st.metric("Remaining in Inbox", f"{remaining:,}")
-            else:
-                st.metric("Remaining in Inbox", "N/A")
-        
-        with col4:
-            heartbeat = get_librarian_heartbeat()
-            if heartbeat:
-                time_since = datetime.now() - heartbeat["last_heartbeat"]
-                seconds_ago = int(time_since.total_seconds())
-                if seconds_ago <= 60:
-                    st.metric("Librarian Heartbeat", f"🟢 {seconds_ago}s ago")
-                elif seconds_ago <= 180:
-                    st.metric("Librarian Heartbeat", f"🟡 {seconds_ago}s ago")
+        stats_container = st.container()
+        with stats_container:
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric("Total Assets Secured", f"{get_total_assets():,}")
+            
+            with col2:
+                st.metric("Processed Last Hour", f"{get_assets_last_hour():,}")
+            
+            with col3:
+                remaining = get_remaining_files()
+                if remaining is not None:
+                    st.metric("Remaining in Inbox", f"{remaining:,}")
                 else:
-                    st.metric("Librarian Heartbeat", f"🔴 {seconds_ago}s ago")
-            else:
-                st.metric("Librarian Heartbeat", "N/A")
+                    st.metric("Remaining in Inbox", "N/A")
+            
+            with col4:
+                heartbeat = get_librarian_heartbeat()
+                if heartbeat:
+                    time_since = datetime.now() - heartbeat["last_heartbeat"]
+                    seconds_ago = int(time_since.total_seconds())
+                    if seconds_ago <= 60:
+                        st.metric("Librarian Heartbeat", f"🟢 {seconds_ago}s ago")
+                    elif seconds_ago <= 180:
+                        st.metric("Librarian Heartbeat", f"🟡 {seconds_ago}s ago")
+                    else:
+                        st.metric("Librarian Heartbeat", f"🔴 {seconds_ago}s ago")
+                else:
+                    st.metric("Librarian Heartbeat", "N/A")
         
         st.markdown("---")
         
-        # Latest Processed Files
+        # Latest Processed Files - use empty container
         st.subheader("📁 Latest Processed Files")
+        files_container = st.empty()
         recent_assets = get_recent_assets(limit=10)
         
         if recent_assets:
             try:
                 import pandas as pd
             except ImportError:
-                st.error("pandas not available")
-                return
-            
-            data = []
-            for asset in recent_assets:
-                data.append({
-                    "File": asset.original_name,
-                    "Size": f"{asset.size_bytes / 1024 / 1024:.2f} MB",
-                    "Captured": asset.captured_at.strftime("%Y-%m-%d %H:%M") if asset.captured_at else "N/A",
-                    "Ingested": asset.ingested_at.strftime("%Y-%m-%d %H:%M:%S"),
-                    "Location": f"{asset.location['lat']:.4f}, {asset.location['lon']:.4f}" if asset.location else "N/A",
-                })
-            
-            df = pd.DataFrame(data)
-            st.dataframe(df, use_container_width=True, hide_index=True)
+                files_container.error("pandas not available")
+            else:
+                data = []
+                for asset in recent_assets:
+                    data.append({
+                        "File": asset.get("original_name", "Unknown"),
+                        "Size": f"{asset.get('size_bytes', 0) / 1024 / 1024:.2f} MB",
+                        "Captured": asset.get("captured_at").strftime("%Y-%m-%d %H:%M") if asset.get("captured_at") else "N/A",
+                        "Ingested": asset.get("ingested_at").strftime("%Y-%m-%d %H:%M:%S") if asset.get("ingested_at") else "N/A",
+                        "Path": asset.get("final_path", "N/A")[:50] + "..." if len(asset.get("final_path", "")) > 50 else asset.get("final_path", "N/A"),
+                    })
+                
+                df = pd.DataFrame(data)
+                files_container.dataframe(df, use_container_width=True, hide_index=True)
         else:
-            st.info("No files processed yet")
+            files_container.info("No files processed yet")
         
         st.markdown("---")
         
-        # All Services Logs
+        # All Services Logs - use empty container
         st.subheader("📋 All Services Logs")
+        logs_container = st.empty()
         if DOCKER_AVAILABLE and available_services:
             all_logs = get_all_logs(available_services, tail=50)
             if all_logs:
                 log_lines = [line for line in all_logs.split('\n') if line.strip()]
                 recent_logs = '\n'.join(log_lines[-100:])
-                st.code(recent_logs, language=None)
+                logs_container.code(recent_logs, language=None)
             else:
-                st.info("No logs available")
+                logs_container.info("No logs available")
         else:
-            st.warning("Docker unavailable - cannot fetch logs")
+            logs_container.warning("Docker unavailable - cannot fetch logs")
     
     else:
         # Show service-specific data
