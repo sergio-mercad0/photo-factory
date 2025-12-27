@@ -86,6 +86,12 @@ Do you approve?"
     * **When to Add:** Every new Docker service added to `docker-compose.yml` must have corresponding integration tests that verify its role in the pipeline.
 
 **8. DOCKER STANDARDS**
+* **Containerization Requirement (MANDATORY):**
+    * ALL services (applications, databases, caches, message queues, etc.) MUST be containerized and defined in `docker-compose.yml`.
+    * This includes any new databases, data stores, or infrastructure components added to the project.
+    * Data persistence MUST use Docker volumes mapped to `./Stack/App_Data/` for portability.
+    * *Rationale:* Ensures consistent environments across development/production, easy deployment, follows "Infrastructure as Code" principle, and maintains portability (Primary Directive).
+    * *Exception:* None. All infrastructure must be containerized.
 * **Strict Versioning:** NEVER use the `:latest` tag. Always pin base images to specific versions (e.g., `python:3.11-slim-bookworm`) to prevent future breakage.
 * **The "Build Gate" Protocol:**
     * When designing `Dockerfiles` for services, prefer **Multi-Stage Builds**.
