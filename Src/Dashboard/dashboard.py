@@ -9,6 +9,7 @@ from typing import Optional
 import docker
 import streamlit as st
 from sqlalchemy import func
+from streamlit_autorefresh import st_autorefresh
 
 from Src.Shared.database import get_db_session, check_database_connection
 from Src.Shared.models import MediaAsset, SystemStatus
@@ -33,6 +34,7 @@ except Exception as e:
     DOCKER_AVAILABLE = False
 
 
+@st.cache_data(ttl=5)  # Cache for 5 seconds
 def get_container_status(container_name: str) -> Optional[dict]:
     """
     Get real-time container status from Docker.
@@ -60,6 +62,7 @@ def get_container_status(container_name: str) -> Optional[dict]:
         return None
 
 
+@st.cache_data(ttl=5)  # Cache for 5 seconds to reduce DB load
 def get_librarian_heartbeat() -> Optional[dict]:
     """Get latest heartbeat from librarian service."""
     try:
@@ -81,6 +84,7 @@ def get_librarian_heartbeat() -> Optional[dict]:
         return None
 
 
+@st.cache_data(ttl=10)  # Cache for 10 seconds
 def get_total_assets() -> int:
     """Get total number of processed assets."""
     try:
@@ -92,6 +96,7 @@ def get_total_assets() -> int:
         return 0
 
 
+@st.cache_data(ttl=30)  # Cache for 30 seconds
 def get_assets_last_hour() -> int:
     """Get number of assets processed in the last hour."""
     try:
@@ -106,6 +111,7 @@ def get_assets_last_hour() -> int:
         return 0
 
 
+@st.cache_data(ttl=5)  # Cache for 5 seconds
 def get_recent_assets(limit: int = 10):
     """Get most recently ingested assets."""
     try:
@@ -113,7 +119,18 @@ def get_recent_assets(limit: int = 10):
             assets = session.query(MediaAsset).order_by(
                 MediaAsset.ingested_at.desc()
             ).limit(limit).all()
-            return assets
+            # Convert to dicts to avoid DetachedInstanceError
+            return [
+                {
+                    "id": str(asset.id),
+                    "original_name": asset.original_name,
+                    "final_path": asset.final_path,
+                    "captured_at": asset.captured_at,
+                    "ingested_at": asset.ingested_at,
+                    "size_bytes": asset.size_bytes,
+                }
+                for asset in assets
+            ]
     except Exception as e:
         logger.error(f"Error getting recent assets: {e}")
         return []
@@ -141,6 +158,7 @@ def get_librarian_queue_length() -> Optional[int]:
     return None
 
 
+@st.cache_data(ttl=5)  # Cache for 5 seconds
 def get_service_heartbeat(service_name: str) -> Optional[dict]:
     """Get latest heartbeat from a specific service."""
     try:
@@ -162,6 +180,7 @@ def get_service_heartbeat(service_name: str) -> Optional[dict]:
         return None
 
 
+@st.cache_data(ttl=5)  # Cache for 5 seconds
 def get_all_services_status() -> list:
     """Get status for all available services."""
     services_status = []
@@ -186,6 +205,7 @@ def get_all_services_status() -> list:
     return services_status
 
 
+@st.cache_data(ttl=30)  # Cache for 30 seconds (services don't change often)
 def get_available_services() -> list:
     """Get list of available Docker services."""
     if not DOCKER_AVAILABLE:
@@ -212,6 +232,7 @@ def get_available_services() -> list:
         return ["librarian", "dashboard", "factory_postgres", "syncthing"]
 
 
+@st.cache_data(ttl=2)  # Cache for 2 seconds (logs change frequently)
 def get_service_logs(service_name: str, tail: int = 100) -> str:
     """
     Get logs from a specific service.
@@ -234,6 +255,7 @@ def get_service_logs(service_name: str, tail: int = 100) -> str:
         return f"[Service '{service_name}' not found]"
     except Exception as e:
         logger.error(f"Error fetching logs from {service_name}: {e}")
+        return ""
         return f"[Error fetching logs from {service_name}: {e}]"
 
 
@@ -302,8 +324,6 @@ def main():
             st.session_state.auto_refresh_enabled = True
         if "refresh_interval" not in st.session_state:
             st.session_state.refresh_interval = 10
-        if "last_rerun_time" not in st.session_state:
-            st.session_state.last_rerun_time = datetime.now()
         
         auto_refresh = st.checkbox("Auto-refresh", value=st.session_state.auto_refresh_enabled, key="auto_refresh_checkbox")
         refresh_interval = st.slider("Interval (sec)", 5, 60, st.session_state.refresh_interval, key="refresh_interval_slider")
@@ -313,17 +333,15 @@ def main():
         st.session_state.refresh_interval = refresh_interval
         
         if st.button("🔄 Refresh Now", key="refresh_button"):
-            st.session_state.last_rerun_time = datetime.now()
+            # Clear cache and rerun
+            st.cache_data.clear()
             st.rerun()
         
-        # Show countdown and status
+        # Use streamlit-autorefresh for reliable auto-refresh
         if auto_refresh:
-            time_since_rerun = (datetime.now() - st.session_state.last_rerun_time).total_seconds()
-            time_remaining = max(0, refresh_interval - time_since_rerun)
-            if time_remaining > 0:
-                st.info(f"🔄 Next refresh in {int(time_remaining)}s")
-            else:
-                st.info("🔄 Refreshing...")
+            st.info(f"🔄 Auto-refreshing every {refresh_interval}s")
+            # Convert seconds to milliseconds for st_autorefresh
+            st_autorefresh(interval=refresh_interval * 1000, key="dashboard_refresh")
     
     # Show service-specific or all services data
     if selected_service == "All Services":
@@ -548,11 +566,11 @@ def main():
                 data = []
                 for asset in recent_assets:
                     data.append({
-                        "File": asset.original_name,
-                        "Size": f"{asset.size_bytes / 1024 / 1024:.2f} MB",
-                        "Captured": asset.captured_at.strftime("%Y-%m-%d %H:%M") if asset.captured_at else "N/A",
-                        "Ingested": asset.ingested_at.strftime("%Y-%m-%d %H:%M:%S"),
-                        "Location": f"{asset.location['lat']:.4f}, {asset.location['lon']:.4f}" if asset.location else "N/A",
+                        "File": asset.get("original_name", "Unknown"),
+                        "Size": f"{asset.get('size_bytes', 0) / 1024 / 1024:.2f} MB",
+                        "Captured": asset.get("captured_at").strftime("%Y-%m-%d %H:%M") if asset.get("captured_at") else "N/A",
+                        "Ingested": asset.get("ingested_at").strftime("%Y-%m-%d %H:%M:%S") if asset.get("ingested_at") else "N/A",
+                        "Path": asset.get("final_path", "N/A")[:50] + "..." if len(asset.get("final_path", "")) > 50 else asset.get("final_path", "N/A"),
                     })
                 
                 df = pd.DataFrame(data)
@@ -574,40 +592,6 @@ def main():
                 st.info(f"No logs available for {selected_service}")
         else:
             st.warning("Docker unavailable - cannot fetch logs")
-    
-    # Auto-refresh logic at the end (using Streamlit rerun to preserve state)
-    if st.session_state.get("auto_refresh_enabled", False):
-        import time
-        refresh_interval = st.session_state.get("refresh_interval", 10)
-        last_rerun = st.session_state.get("last_rerun_time", datetime.now())
-        
-        time_elapsed = (datetime.now() - last_rerun).total_seconds()
-        
-        if time_elapsed >= refresh_interval:
-            # Time to refresh - update timestamp and rerun (preserves session state)
-            st.session_state.last_rerun_time = datetime.now()
-            time.sleep(0.1)  # Small delay to allow UI to render
-            st.rerun()
-        else:
-            # Not time yet - use JavaScript to trigger rerun after remaining time
-            time_remaining = refresh_interval - time_elapsed
-            st.markdown(
-                f"""
-                <script>
-                setTimeout(function() {{
-                    // Trigger Streamlit rerun by posting message to parent frame
-                    if (window.parent && window.parent.postMessage) {{
-                        window.parent.postMessage({{type: 'streamlit:rerun'}}, '*');
-                    }}
-                    // Fallback: use Streamlit's rerun if available
-                    if (window.streamlit && window.streamlit.rerun) {{
-                        window.streamlit.rerun();
-                    }}
-                }}, {int(time_remaining * 1000)});
-                </script>
-                """,
-                unsafe_allow_html=True
-            )
 
 
 if __name__ == "__main__":
