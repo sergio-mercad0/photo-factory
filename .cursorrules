@@ -99,7 +99,7 @@ Do you approve?"
         3. **Health Check:** Wait for health checks to pass (if configured) or verify the service is running (`docker-compose ps`).
         4. **Functionality:** Verify the service performs its intended function (e.g., process files, respond to requests, connect to database).
         5. **Cleanup:** Remove any test files, mock data, or temporary artifacts created during validation. This includes:
-            * Test files in `Photos_Inbox/` or `Storage/` created for testing
+            * Test files in `Photos_Inbox/` or `Storage/` or ``Storage`/` created for testing
             * Temporary Docker volumes or containers created for validation
             * Any mock data or configuration files created for testing purposes
             * *Rationale:* Keeps the workspace clean and prevents test artifacts from affecting production behavior.
@@ -112,10 +112,14 @@ Do you approve?"
     * *Result:* If the tests fail during the build, the `docker build` command must fail. This prevents bad code from becoming a container.
 * **Runtime Health Checks (MANDATORY):**
     * Every service must include a `healthcheck` in `docker-compose.yml`.
-    * The health check should run a lightweight test suite to verify the service is functioning.
-    * Health check command should run: `pytest Src/Librarian/tests/ --tb=short -q` (quiet mode for health checks).
-    * Health check interval: `30s`, timeout: `10s`, retries: `3`, start period: `40s`.
-    * *Result:* If health check fails, Docker will mark the container as unhealthy and can trigger restart policies.
+    * Health checks should be **lightweight** (check process alive, not comprehensive tests).
+    * Examples: `python -c "import sys; sys.exit(0)"` or check health file exists, or simple HTTP endpoint.
+    * Health check interval: `2m` (2 minutes), timeout: `5s`, retries: `2`, start period: `60s`.
+    * *Rationale:* Health checks detect container failures, not application logic. Full test suites belong in CI/CD, not runtime health checks.
+    * *Application Monitoring:*
+        * **Real-time Status:** Dashboard polls Docker directly (via Docker API or `docker ps`) for current container status. Docker is the source of truth for "is service running now".
+        * **Historical Status:** Services update `system_status` table periodically (1-5 minutes) for historical trends, metrics, and offline analysis. Database stores past heartbeats and operational data.
+        * *Separation:* Real-time = Docker, Historical = Database.
 * **Layer Efficiency:** specific order is MANDATORY to use Docker caching:
     1.  Copy `requirements.txt`.
     2.  RUN pip install.
