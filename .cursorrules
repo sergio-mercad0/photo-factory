@@ -92,6 +92,19 @@ Do you approve?"
     * Data persistence MUST use Docker volumes mapped to `./Stack/App_Data/` for portability.
     * *Rationale:* Ensures consistent environments across development/production, easy deployment, follows "Infrastructure as Code" principle, and maintains portability (Primary Directive).
     * *Exception:* None. All infrastructure must be containerized.
+* **Docker Validation Protocol (MANDATORY):**
+    * After creating or modifying any Docker service, Cursor MUST validate the container works end-to-end:
+        1. **Build:** Run `docker-compose build <service>` (or `docker build` for standalone) to verify the container builds successfully.
+        2. **Start:** Run `docker-compose up -d <service>` (or equivalent) to verify the container starts without errors.
+        3. **Health Check:** Wait for health checks to pass (if configured) or verify the service is running (`docker-compose ps`).
+        4. **Functionality:** Verify the service performs its intended function (e.g., process files, respond to requests, connect to database).
+        5. **Cleanup:** Remove any test files, mock data, or temporary artifacts created during validation. This includes:
+            * Test files in `Photos_Inbox/` or `Storage/` created for testing
+            * Temporary Docker volumes or containers created for validation
+            * Any mock data or configuration files created for testing purposes
+            * *Rationale:* Keeps the workspace clean and prevents test artifacts from affecting production behavior.
+    * *When to Run:* This validation MUST be performed before committing changes (as part of the Version Control Protocol).
+    * *Failure Handling:* If any step fails, fix the issue before proceeding. Do not commit broken containers.
 * **Strict Versioning:** NEVER use the `:latest` tag. Always pin base images to specific versions (e.g., `python:3.11-slim-bookworm`) to prevent future breakage.
 * **The "Build Gate" Protocol:**
     * When designing `Dockerfiles` for services, prefer **Multi-Stage Builds**.
