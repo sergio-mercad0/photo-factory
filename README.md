@@ -154,6 +154,38 @@ Health check configuration:
 
 The project includes a comprehensive pytest test suite located in `Src/Librarian/tests/`.
 
+#### Option 1: Run Tests in Docker (Recommended)
+
+**Run tests in a temporary container:**
+```bash
+cd Stack/App_Data
+docker-compose run --rm librarian pytest Src/Librarian/tests/ -v --tb=short
+```
+
+**Run tests during Docker build (automatic):**
+```bash
+cd Stack/App_Data
+docker-compose build librarian
+```
+Tests run automatically during the build process. The build will fail if any tests fail.
+
+**Run a specific test file:**
+```bash
+docker-compose run --rm librarian pytest Src/Librarian/tests/test_librarian_integration.py -v
+```
+
+**Run a specific test:**
+```bash
+docker-compose run --rm librarian pytest Src/Librarian/tests/test_librarian_integration.py::TestDateSorting::test_file_organized_by_date -v
+```
+
+#### Option 2: Run Tests Locally
+
+**Prerequisites:**
+```bash
+pip install -r requirements.txt
+```
+
 **Run all tests:**
 ```bash
 pytest Src/Librarian/tests/
@@ -161,12 +193,17 @@ pytest Src/Librarian/tests/
 
 **Run with verbose output:**
 ```bash
-pytest Src/Librarian/tests/ -v
+pytest Src/Librarian/tests/ -v --tb=short
 ```
 
 **Run specific test file:**
 ```bash
-pytest Src/Librarian/tests/test_librarian_integration.py
+pytest Src/Librarian/tests/test_librarian_integration.py -v
+```
+
+**Run tests with coverage:**
+```bash
+pytest Src/Librarian/tests/ --cov=Src/Librarian --cov-report=html
 ```
 
 ### Test Coverage
