@@ -302,8 +302,6 @@ def main():
             st.session_state.auto_refresh_enabled = True
         if "refresh_interval" not in st.session_state:
             st.session_state.refresh_interval = 10
-        if "last_refresh_time" not in st.session_state:
-            st.session_state.last_refresh_time = datetime.now()
         
         auto_refresh = st.checkbox("Auto-refresh", value=st.session_state.auto_refresh_enabled, key="auto_refresh_checkbox")
         refresh_interval = st.slider("Interval (sec)", 5, 60, st.session_state.refresh_interval, key="refresh_interval_slider")
@@ -313,16 +311,41 @@ def main():
         st.session_state.refresh_interval = refresh_interval
         
         if st.button("🔄 Refresh Now", key="refresh_button"):
-            st.session_state.last_refresh_time = datetime.now()
             st.rerun()
         
+        # Auto-refresh countdown and trigger (client-side JavaScript)
         if auto_refresh:
-            time_since = (datetime.now() - st.session_state.last_refresh_time).total_seconds()
-            time_remaining = max(0, refresh_interval - time_since)
-            if time_remaining > 0:
-                st.info(f"🔄 Next refresh in {int(time_remaining)}s")
-            else:
-                st.info("🔄 Refreshing...")
+            st.markdown(f'<div id="refresh-countdown">🔄 Next refresh in {refresh_interval}s</div>', unsafe_allow_html=True)
+            st.markdown(
+                f"""
+                <script>
+                (function() {{
+                    const interval = {refresh_interval};
+                    let timeLeft = interval;
+                    const countdownEl = document.getElementById('refresh-countdown');
+                    
+                    // Update countdown every second
+                    const countdownInterval = setInterval(function() {{
+                        timeLeft--;
+                        if (countdownEl) {{
+                            if (timeLeft > 0) {{
+                                countdownEl.textContent = '🔄 Next refresh in ' + timeLeft + 's';
+                            }} else {{
+                                countdownEl.textContent = '🔄 Refreshing...';
+                            }}
+                        }}
+                    }}, 1000);
+                    
+                    // Reload page after interval
+                    setTimeout(function() {{
+                        clearInterval(countdownInterval);
+                        window.location.reload();
+                    }}, interval * 1000);
+                }})();
+                </script>
+                """,
+                unsafe_allow_html=True
+            )
     
     # Show service-specific or all services data
     if selected_service == "All Services":
@@ -573,33 +596,6 @@ def main():
                 st.info(f"No logs available for {selected_service}")
         else:
             st.warning("Docker unavailable - cannot fetch logs")
-    
-    # Auto-refresh logic at the end
-    if st.session_state.get("auto_refresh_enabled", False):
-        import time
-        refresh_interval = st.session_state.get("refresh_interval", 10)
-        last_refresh = st.session_state.get("last_refresh_time", datetime.now())
-        
-        time_elapsed = (datetime.now() - last_refresh).total_seconds()
-        
-        if time_elapsed >= refresh_interval:
-            # Time to refresh - update timestamp and rerun
-            st.session_state.last_refresh_time = datetime.now()
-            time.sleep(0.1)  # Small delay to allow UI to render
-            st.rerun()
-        else:
-            # Not time yet - use JavaScript to schedule next refresh
-            time_remaining = refresh_interval - time_elapsed
-            st.markdown(
-                f"""
-                <script>
-                setTimeout(function() {{
-                    window.location.reload();
-                }}, {int(time_remaining * 1000)});
-                </script>
-                """,
-                unsafe_allow_html=True
-            )
 
 
 if __name__ == "__main__":
