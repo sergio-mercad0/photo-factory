@@ -574,6 +574,40 @@ def main():
                 st.info(f"No logs available for {selected_service}")
         else:
             st.warning("Docker unavailable - cannot fetch logs")
+    
+    # Auto-refresh logic at the end (using Streamlit rerun to preserve state)
+    if st.session_state.get("auto_refresh_enabled", False):
+        import time
+        refresh_interval = st.session_state.get("refresh_interval", 10)
+        last_rerun = st.session_state.get("last_rerun_time", datetime.now())
+        
+        time_elapsed = (datetime.now() - last_rerun).total_seconds()
+        
+        if time_elapsed >= refresh_interval:
+            # Time to refresh - update timestamp and rerun (preserves session state)
+            st.session_state.last_rerun_time = datetime.now()
+            time.sleep(0.1)  # Small delay to allow UI to render
+            st.rerun()
+        else:
+            # Not time yet - use JavaScript to trigger rerun after remaining time
+            time_remaining = refresh_interval - time_elapsed
+            st.markdown(
+                f"""
+                <script>
+                setTimeout(function() {{
+                    // Trigger Streamlit rerun by posting message to parent frame
+                    if (window.parent && window.parent.postMessage) {{
+                        window.parent.postMessage({{type: 'streamlit:rerun'}}, '*');
+                    }}
+                    // Fallback: use Streamlit's rerun if available
+                    if (window.streamlit && window.streamlit.rerun) {{
+                        window.streamlit.rerun();
+                    }}
+                }}, {int(time_remaining * 1000)});
+                </script>
+                """,
+                unsafe_allow_html=True
+            )
 
 
 if __name__ == "__main__":
