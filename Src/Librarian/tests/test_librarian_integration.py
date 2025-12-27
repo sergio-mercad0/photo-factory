@@ -18,7 +18,7 @@ class TestDateSorting:
     """Test that files are sorted into correct date folders."""
     
     def test_file_organized_by_date(
-        self, mock_paths, tmp_inbox: Path, tmp_storage: Path, create_test_file_with_date
+        self, mock_paths, mock_database, librarian_service, tmp_inbox: Path, tmp_storage: Path, create_test_file_with_date
     ):
         """Test that file is organized into correct YYYY/YYYY-MM-DD folder."""
         # Verify mock_paths is working
@@ -35,12 +35,8 @@ class TestDateSorting:
             content=b"test photo content"
         )
         
-        # Create service with fast processing (no stability delay for tests)
-        service = LibrarianService(
-            stability_delay=0.1,
-            min_file_age=0.1,
-            log_level="WARNING"  # Reduce log noise
-        )
+        # Use fixture service (already configured with mocks)
+        service = librarian_service
         
         # Verify service is using mocked storage path
         assert service.storage_path == tmp_storage, f"Service using wrong storage path: {service.storage_path} != {tmp_storage}"

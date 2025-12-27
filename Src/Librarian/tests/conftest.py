@@ -6,6 +6,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Callable
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -143,4 +144,95 @@ def create_test_file_with_date(tmp_path: Path) -> Callable:
         return file_path
     
     return _create_file_with_date
+
+
+@pytest.fixture
+def mock_database(monkeypatch):
+    """
+    Mock database session and models for testing.
+    
+    Prevents tests from requiring a running database.
+    """
+    # Mock database session
+    mock_session = MagicMock()
+    mock_session.__enter__ = MagicMock(return_value=mock_session)
+    mock_session.__exit__ = MagicMock(return_value=None)
+    mock_session.commit = MagicMock()
+    mock_session.rollback = MagicMock()
+    mock_session.close = MagicMock()
+    mock_session.query = MagicMock(return_value=mock_session)
+    mock_session.filter = MagicMock(return_value=mock_session)
+    mock_session.first = MagicMock(return_value=None)
+    mock_session.add = MagicMock()
+    
+    # Mock get_db_session context manager
+    def mock_get_db_session():
+        return mock_session
+    
+    # Mock init_database and check_database_connection
+    def mock_init_database():
+        pass
+    
+    def mock_check_database_connection():
+        return True
+    
+    # Patch database functions
+    monkeypatch.setattr("Src.Librarian.librarian.get_db_session", mock_get_db_session)
+    monkeypatch.setattr("Src.Librarian.librarian.init_database", mock_init_database)
+    monkeypatch.setattr("Src.Librarian.librarian.check_database_connection", mock_check_database_connection)
+    
+    # Also patch in heartbeat module
+    monkeypatch.setattr("Src.Librarian.heartbeat.get_db_session", mock_get_db_session)
+    
+    yield mock_session
+
+
+@pytest.fixture
+def mock_exiftool(monkeypatch):
+    """
+    Mock PyExifTool for testing metadata extraction.
+    
+    Prevents tests from requiring exiftool to be installed.
+    """
+    # Mock ExifToolHelper
+    mock_exiftool = MagicMock()
+    mock_exiftool.__enter__ = MagicMock(return_value=mock_exiftool)
+    mock_exiftool.__exit__ = MagicMock(return_value=None)
+    mock_exiftool.get_metadata = MagicMock(return_value=[])
+    
+    # Mock ExifToolHelper class
+    mock_exiftool_class = MagicMock(return_value=mock_exiftool)
+    
+    # Patch exiftool module
+    with patch.dict("sys.modules", {"exiftool": MagicMock(ExifToolHelper=mock_exiftool_class)}):
+        yield mock_exiftool
+
+
+@pytest.fixture
+def librarian_service(mock_paths, mock_database, tmp_inbox: Path, tmp_storage: Path):
+    """
+    Create a LibrarianService instance configured for testing.
+    
+    - Uses mocked paths (tmp_inbox, tmp_storage)
+    - Uses mocked database
+    - Heartbeat service disabled (no threading in tests)
+    - Fast processing (minimal delays)
+    """
+    from Src.Librarian.librarian import LibrarianService
+    
+    service = LibrarianService(
+        stability_delay=0.1,
+        min_file_age=0.1,
+        log_level="WARNING",  # Reduce log noise
+        heartbeat_interval=3600.0  # Long interval
+    )
+    
+    # Disable heartbeat service (runs in thread, complicates tests)
+    service.heartbeat._running = True  # Mark as running to prevent start
+    
+    yield service
+    
+    # Cleanup
+    if service.running:
+        service.stop()
 
