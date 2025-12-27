@@ -70,6 +70,20 @@ Do you approve?"
     * **Collision:** Verify that a file with same name but different hash is renamed (e.g., `_copy_1`) and preserved.
     * **Read-Only:** Verify behavior if a destination file is locked (should retry or log error, not crash).
 * **Delivery:** Every Python module (e.g., `librarian.py`) must be delivered with a sibling test file (e.g., `tests/test_librarian.py`).
+* **Docker/Infrastructure Integration Tests (MANDATORY):**
+    * **Purpose:** Verify that Docker services work together correctly and the full pipeline functions end-to-end.
+    * **Location:** Integration tests for Docker services should be in `Src/Librarian/tests/test_docker_integration.py` (or equivalent for other services).
+    * **Coverage Requirements:**
+        * **Full Pipeline:** Test the complete workflow (e.g., Syncthing → Photos_Inbox → Librarian → Storage).
+        * **Service Integration:** Verify services interact correctly (file appears in inbox, gets processed, organized).
+        * **Volume Mounts:** Verify paths resolve correctly and files can be read/written.
+        * **Health Checks:** Verify service health check mechanisms work (service can report healthy status).
+        * **Error Handling:** Test graceful handling of missing directories, permission issues, etc.
+    * **Implementation:**
+        * Use mocked paths (`tmp_path` fixtures) - tests should NOT require Docker to be running.
+        * Test the integration logic, not the Docker runtime itself.
+        * For testing with actual Docker services, see README.md for manual testing procedures.
+    * **When to Add:** Every new Docker service added to `docker-compose.yml` must have corresponding integration tests that verify its role in the pipeline.
 
 **8. DOCKER STANDARDS**
 * **Strict Versioning:** NEVER use the `:latest` tag. Always pin base images to specific versions (e.g., `python:3.11-slim-bookworm`) to prevent future breakage.
