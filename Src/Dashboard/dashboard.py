@@ -122,6 +122,30 @@ def get_remaining_files() -> Optional[int]:
     return None
 
 
+def get_librarian_queue_length() -> Optional[int]:
+    """
+    Get approximate queue length for librarian service.
+    This would require the librarian to track pending files.
+    For now, we can estimate by checking files in Photos_Inbox.
+    """
+    # This would require access to the file system or librarian's internal state
+    # For now, return None to indicate it's not available
+    return None
+
+
+def get_service_heartbeat(service_name: str) -> Optional[SystemStatus]:
+    """Get latest heartbeat from a specific service."""
+    try:
+        with get_db_session() as session:
+            status = session.query(SystemStatus).filter(
+                SystemStatus.service_name == service_name
+            ).first()
+            return status
+    except Exception as e:
+        logger.error(f"Error getting heartbeat for {service_name}: {e}")
+        return None
+
+
 def get_available_services() -> list:
     """Get list of available Docker services."""
     if not DOCKER_AVAILABLE:
@@ -209,6 +233,21 @@ def main():
     )
     
     st.title("📸 Photo Factory Dashboard")
+    
+    # Service Selector at the top
+    available_services = get_available_services()
+    if available_services:
+        service_options = ["All Services"] + available_services
+        selected_service = st.selectbox(
+            "🔍 **Select Service to View:**",
+            options=service_options,
+            index=0,
+            key="service_selector"
+        )
+    else:
+        selected_service = "All Services"
+        st.warning("No services available")
+    
     st.markdown("---")
     
     # Check database connection
@@ -235,162 +274,206 @@ def main():
         if st.button("🔄 Refresh Now"):
             st.rerun()
     
-    # System Status Row
-    st.subheader("System Status")
-    status_col1, status_col2, status_col3 = st.columns(3)
-    
-    with status_col1:
-        db_status = "🟢 Connected" if db_connected else "🔴 Disconnected"
-        st.write(f"**Database:** {db_status}")
-    
-    with status_col2:
-        docker_status = "🟢 Available" if DOCKER_AVAILABLE else "🔴 Unavailable"
-        st.write(f"**Docker:** {docker_status}")
-    
-    with status_col3:
-        container_status = get_container_status("librarian")
-        if container_status:
-            if container_status["running"]:
-                health = container_status.get("health", "unknown")
-                if health == "healthy":
-                    st.write("**Librarian:** 🟢 Running (Healthy)")
-                elif health == "unhealthy":
-                    st.write("**Librarian:** 🔴 Running (Unhealthy)")
-                else:
-                    st.write(f"**Librarian:** 🟡 Running ({health})")
+    # Show service-specific or all services data
+    if selected_service == "All Services":
+        # Show overview for all services
+        st.subheader("System Overview")
+        status_col1, status_col2, status_col3 = st.columns(3)
+        
+        with status_col1:
+            db_status = "🟢 Connected" if db_connected else "🔴 Disconnected"
+            st.write(f"**Database:** {db_status}")
+        
+        with status_col2:
+            docker_status = "🟢 Available" if DOCKER_AVAILABLE else "🔴 Unavailable"
+            st.write(f"**Docker:** {docker_status}")
+        
+        with status_col3:
+            st.write(f"**Services Available:** {len(available_services)}")
+        
+        st.markdown("---")
+        
+        # Overall Statistics
+        st.subheader("Overall Statistics")
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Total Assets Secured", f"{get_total_assets():,}")
+        
+        with col2:
+            st.metric("Processed Last Hour", f"{get_assets_last_hour():,}")
+        
+        with col3:
+            remaining = get_remaining_files()
+            if remaining is not None:
+                st.metric("Remaining in Inbox", f"{remaining:,}")
             else:
-                st.write(f"**Librarian:** 🔴 {container_status['status']}")
-        else:
-            st.write("**Librarian:** ⚠️ Status unavailable")
+                st.metric("Remaining in Inbox", "N/A")
         
-        # Heartbeat indicator
-        heartbeat = get_librarian_heartbeat()
-        if heartbeat:
-            time_since = datetime.now() - heartbeat.last_heartbeat
-            if time_since.total_seconds() < 30:
-                st.success(f"💓 Heartbeat: {int(time_since.total_seconds())}s ago")
-            elif time_since.total_seconds() < 120:
-                st.warning(f"💓 Heartbeat: {int(time_since.total_seconds())}s ago")
+        with col4:
+            heartbeat = get_librarian_heartbeat()
+            if heartbeat:
+                time_since = datetime.now() - heartbeat.last_heartbeat
+                st.metric("Librarian Heartbeat", f"{int(time_since.total_seconds())}s ago")
             else:
-                st.error(f"💓 Heartbeat: {int(time_since.total_seconds())}s ago")
+                st.metric("Librarian Heartbeat", "N/A")
+        
+        st.markdown("---")
+        
+        # Latest Processed Files
+        st.subheader("📁 Latest Processed Files")
+        recent_assets = get_recent_assets(limit=10)
+        
+        if recent_assets:
+            try:
+                import pandas as pd
+            except ImportError:
+                st.error("pandas not available")
+                return
             
-            if heartbeat.current_task:
-                st.caption(f"Task: {heartbeat.current_task}")
-    
-    st.markdown("---")
-    
-    # Stats Row - Big Numbers
-    st.subheader("Statistics")
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric("Total Assets Secured", f"{get_total_assets():,}")
-    
-    with col2:
-        st.metric("Processed Last Hour", f"{get_assets_last_hour():,}")
-    
-    with col3:
-        remaining = get_remaining_files()
-        if remaining is not None:
-            st.metric("Remaining in Inbox", f"{remaining:,}")
-        else:
-            st.metric("Remaining in Inbox", "N/A")
-    
-    with col4:
-        if heartbeat:
-            time_since = datetime.now() - heartbeat.last_heartbeat
-            st.metric("Last Heartbeat", f"{int(time_since.total_seconds())}s ago")
-        else:
-            st.metric("Last Heartbeat", "N/A")
-    
-    st.markdown("---")
-    
-    # Latest Processed Files
-    st.subheader("📁 Latest Processed Files")
-    recent_assets = get_recent_assets(limit=10)
-    
-    if recent_assets:
-        try:
-            import pandas as pd
-        except ImportError:
-            st.error("pandas not available - install with: pip install pandas")
-            return
-        
-        data = []
-        for asset in recent_assets:
-            data.append({
-                "File": asset.original_name,
-                "Size": f"{asset.size_bytes / 1024 / 1024:.2f} MB",
-                "Captured": asset.captured_at.strftime("%Y-%m-%d %H:%M") if asset.captured_at else "N/A",
-                "Ingested": asset.ingested_at.strftime("%Y-%m-%d %H:%M:%S"),
-                "Location": f"{asset.location['lat']:.4f}, {asset.location['lon']:.4f}" if asset.location else "N/A",
-            })
-        
-        df = pd.DataFrame(data)
-        st.dataframe(df, use_container_width=True, hide_index=True)
-    else:
-        st.info("No files processed yet")
-    
-    st.markdown("---")
-    
-    # Most Recent Logs with Service Selector
-    log_col1, log_col2 = st.columns([1, 4])
-    
-    with log_col1:
-        st.subheader("📋 Service Logs")
-        
-        # Get available services
-        available_services = get_available_services()
-        
-        if available_services:
-            # Add "All Services" option at the beginning
-            service_options = ["All Services"] + available_services
+            data = []
+            for asset in recent_assets:
+                data.append({
+                    "File": asset.original_name,
+                    "Size": f"{asset.size_bytes / 1024 / 1024:.2f} MB",
+                    "Captured": asset.captured_at.strftime("%Y-%m-%d %H:%M") if asset.captured_at else "N/A",
+                    "Ingested": asset.ingested_at.strftime("%Y-%m-%d %H:%M:%S"),
+                    "Location": f"{asset.location['lat']:.4f}, {asset.location['lon']:.4f}" if asset.location else "N/A",
+                })
             
-            selected_service = st.selectbox(
-                "Filter by service:",
-                options=service_options,
-                index=0,  # Default to "All Services"
-                key="service_selector"
-            )
+            df = pd.DataFrame(data)
+            st.dataframe(df, use_container_width=True, hide_index=True)
         else:
-            selected_service = None
-            st.warning("No services available")
-    
-    with log_col2:
-        if not DOCKER_AVAILABLE:
+            st.info("No files processed yet")
+        
+        st.markdown("---")
+        
+        # All Services Logs
+        st.subheader("📋 All Services Logs")
+        if DOCKER_AVAILABLE and available_services:
+            all_logs = get_all_logs(available_services, tail=50)
+            if all_logs:
+                log_lines = [line for line in all_logs.split('\n') if line.strip()]
+                recent_logs = '\n'.join(log_lines[-100:])
+                st.code(recent_logs, language=None)
+            else:
+                st.info("No logs available")
+        else:
             st.warning("Docker unavailable - cannot fetch logs")
-        elif selected_service:
-            if selected_service == "All Services":
-                # Show logs from all services
-                st.subheader("All Services Logs")
-                all_logs = get_all_logs(available_services, tail=50)
-                
-                if all_logs:
-                    # Split into lines, sort by timestamp, and show most recent
-                    log_lines = []
-                    for line in all_logs.split('\n'):
-                        if line.strip():
-                            log_lines.append(line)
-                    
-                    # Show last 100 lines total
-                    recent_logs = '\n'.join(log_lines[-100:])
-                    st.code(recent_logs, language=None)
+    
+    else:
+        # Show service-specific data
+        service_display_name = selected_service.replace("_", " ").replace("-", " ").title()
+        st.subheader(f"📊 {service_display_name} Service Details")
+        
+        # Service Status
+        container_status = get_container_status(selected_service)
+        status_col1, status_col2 = st.columns(2)
+        
+        with status_col1:
+            if container_status:
+                if container_status["running"]:
+                    health = container_status.get("health", "unknown")
+                    if health == "healthy":
+                        st.success(f"🟢 Status: Running (Healthy)")
+                    elif health == "unhealthy":
+                        st.error(f"🔴 Status: Running (Unhealthy)")
+                    else:
+                        st.info(f"🟡 Status: Running ({health})")
                 else:
-                    st.info("No logs available")
+                    st.error(f"🔴 Status: {container_status['status']}")
             else:
-                # Show logs from selected service
-                st.subheader(f"Logs: {selected_service}")
-                logs = get_service_logs(selected_service, tail=100)
-                
-                if logs:
-                    # Split logs into lines and show most recent
-                    log_lines = logs.strip().split('\n')
-                    recent_logs = '\n'.join(log_lines[-50:])  # Show last 50 lines
-                    st.code(recent_logs, language=None)
+                st.warning("⚠️ Status unavailable")
+        
+        with status_col2:
+            # Get heartbeat if available
+            heartbeat = get_service_heartbeat(selected_service.split("_")[0] if "_" in selected_service else selected_service)
+            if heartbeat:
+                time_since = datetime.now() - heartbeat.last_heartbeat
+                if time_since.total_seconds() < 30:
+                    st.success(f"💓 Heartbeat: {int(time_since.total_seconds())}s ago")
+                elif time_since.total_seconds() < 120:
+                    st.warning(f"💓 Heartbeat: {int(time_since.total_seconds())}s ago")
                 else:
-                    st.info(f"No logs available for {selected_service}")
+                    st.error(f"💓 Heartbeat: {int(time_since.total_seconds())}s ago")
+                
+                if heartbeat.current_task:
+                    st.caption(f"Current Task: {heartbeat.current_task}")
+            else:
+                st.info("No heartbeat data available")
+        
+        st.markdown("---")
+        
+        # Service-specific metrics
+        if "librarian" in selected_service.lower():
+            # Librarian-specific data
+            st.subheader("📈 Librarian Metrics")
+            metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
+            
+            with metric_col1:
+                st.metric("Total Assets Processed", f"{get_total_assets():,}")
+            
+            with metric_col2:
+                st.metric("Processed Last Hour", f"{get_assets_last_hour():,}")
+            
+            with metric_col3:
+                queue_length = get_librarian_queue_length()
+                if queue_length is not None:
+                    st.metric("Queue Length", f"{queue_length:,}")
+                else:
+                    st.metric("Queue Length", "N/A")
+                    st.caption("Not available")
+            
+            with metric_col4:
+                remaining = get_remaining_files()
+                if remaining is not None:
+                    st.metric("Files in Inbox", f"{remaining:,}")
+                else:
+                    st.metric("Files in Inbox", "N/A")
+                    st.caption("Not available")
+            
+            st.markdown("---")
+            
+            # Latest Processed Files by Librarian
+            st.subheader("📁 Latest Processed Files")
+            recent_assets = get_recent_assets(limit=20)
+            
+            if recent_assets:
+                try:
+                    import pandas as pd
+                except ImportError:
+                    st.error("pandas not available")
+                    return
+                
+                data = []
+                for asset in recent_assets:
+                    data.append({
+                        "File": asset.original_name,
+                        "Size": f"{asset.size_bytes / 1024 / 1024:.2f} MB",
+                        "Captured": asset.captured_at.strftime("%Y-%m-%d %H:%M") if asset.captured_at else "N/A",
+                        "Ingested": asset.ingested_at.strftime("%Y-%m-%d %H:%M:%S"),
+                        "Location": f"{asset.location['lat']:.4f}, {asset.location['lon']:.4f}" if asset.location else "N/A",
+                    })
+                
+                df = pd.DataFrame(data)
+                st.dataframe(df, use_container_width=True, hide_index=True)
+            else:
+                st.info("No files processed yet")
+        
+        st.markdown("---")
+        
+        # Service Logs
+        st.subheader(f"📋 {service_display_name} Logs")
+        if DOCKER_AVAILABLE:
+            logs = get_service_logs(selected_service, tail=200)
+            if logs:
+                log_lines = logs.strip().split('\n')
+                recent_logs = '\n'.join(log_lines[-100:])  # Show last 100 lines
+                st.code(recent_logs, language=None)
+            else:
+                st.info(f"No logs available for {selected_service}")
         else:
-            st.info("Select a service to view logs")
+            st.warning("Docker unavailable - cannot fetch logs")
 
 
 if __name__ == "__main__":
