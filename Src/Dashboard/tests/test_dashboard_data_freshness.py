@@ -62,8 +62,11 @@ class TestHeartbeatDataFreshness:
     
     def test_heartbeat_returns_none_when_no_data(self):
         """Test that heartbeat returns None when no data exists."""
+        # Clear cache to ensure fresh test
+        get_librarian_heartbeat.clear()
+        
         with patch('Src.Dashboard.dashboard.get_db_session') as mock_session:
-            # Mock the query chain: query().filter().first() returns None
+            # Mock the query chain: query(SystemStatus).filter().first() returns None
             mock_query_result = Mock()
             mock_query_result.first.return_value = None
             
