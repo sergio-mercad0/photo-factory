@@ -47,11 +47,13 @@ COPY requirements.txt .
 # Set PYTHONPATH for runtime
 ENV PYTHONPATH=/app
 
-# Create non-root user for security
+# Create non-root user for file ownership
 RUN useradd -m -u 1000 dashboard && \
     chown -R dashboard:dashboard /app
 
-USER dashboard
+# Run as root to access Docker socket (required for monitoring)
+# The dashboard only reads Docker API, doesn't execute privileged operations
+USER root
 
 # Expose Streamlit port
 EXPOSE 8501

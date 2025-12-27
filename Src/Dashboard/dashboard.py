@@ -60,14 +60,22 @@ def get_container_status(container_name: str) -> Optional[dict]:
         return None
 
 
-def get_librarian_heartbeat() -> Optional[SystemStatus]:
+def get_librarian_heartbeat() -> Optional[dict]:
     """Get latest heartbeat from librarian service."""
     try:
         with get_db_session() as session:
             status = session.query(SystemStatus).filter(
                 SystemStatus.service_name == "librarian"
             ).first()
-            return status
+            if status:
+                # Access all attributes while still in session context
+                return {
+                    "last_heartbeat": status.last_heartbeat,
+                    "status": status.status,
+                    "current_task": status.current_task,
+                    "updated_at": status.updated_at,
+                }
+            return None
     except Exception as e:
         logger.error(f"Error getting heartbeat: {e}")
         return None
@@ -133,14 +141,22 @@ def get_librarian_queue_length() -> Optional[int]:
     return None
 
 
-def get_service_heartbeat(service_name: str) -> Optional[SystemStatus]:
+def get_service_heartbeat(service_name: str) -> Optional[dict]:
     """Get latest heartbeat from a specific service."""
     try:
         with get_db_session() as session:
             status = session.query(SystemStatus).filter(
                 SystemStatus.service_name == service_name
             ).first()
-            return status
+            if status:
+                # Access all attributes while still in session context
+                return {
+                    "last_heartbeat": status.last_heartbeat,
+                    "status": status.status,
+                    "current_task": status.current_task,
+                    "updated_at": status.updated_at,
+                }
+            return None
     except Exception as e:
         logger.error(f"Error getting heartbeat for {service_name}: {e}")
         return None
@@ -149,7 +165,8 @@ def get_service_heartbeat(service_name: str) -> Optional[SystemStatus]:
 def get_available_services() -> list:
     """Get list of available Docker services."""
     if not DOCKER_AVAILABLE:
-        return []
+        # Return known services even if Docker is unavailable
+        return ["librarian", "dashboard", "factory_postgres", "syncthing"]
     
     try:
         # Get all containers with the photo-factory prefix or known service names
@@ -167,7 +184,8 @@ def get_available_services() -> list:
         return sorted(list(set(service_names)))
     except Exception as e:
         logger.error(f"Error getting available services: {e}")
-        return []
+        # Return known services as fallback
+        return ["librarian", "dashboard", "factory_postgres", "syncthing"]
 
 
 def get_service_logs(service_name: str, tail: int = 100) -> str:
@@ -313,7 +331,7 @@ def main():
         with col4:
             heartbeat = get_librarian_heartbeat()
             if heartbeat:
-                time_since = datetime.now() - heartbeat.last_heartbeat
+                time_since = datetime.now() - heartbeat["last_heartbeat"]
                 st.metric("Librarian Heartbeat", f"{int(time_since.total_seconds())}s ago")
             else:
                 st.metric("Librarian Heartbeat", "N/A")
@@ -389,7 +407,7 @@ def main():
             # Get heartbeat if available
             heartbeat = get_service_heartbeat(selected_service.split("_")[0] if "_" in selected_service else selected_service)
             if heartbeat:
-                time_since = datetime.now() - heartbeat.last_heartbeat
+                time_since = datetime.now() - heartbeat["last_heartbeat"]
                 if time_since.total_seconds() < 30:
                     st.success(f"💓 Heartbeat: {int(time_since.total_seconds())}s ago")
                 elif time_since.total_seconds() < 120:
@@ -397,8 +415,8 @@ def main():
                 else:
                     st.error(f"💓 Heartbeat: {int(time_since.total_seconds())}s ago")
                 
-                if heartbeat.current_task:
-                    st.caption(f"Current Task: {heartbeat.current_task}")
+                if heartbeat.get("current_task"):
+                    st.caption(f"Current Task: {heartbeat['current_task']}")
             else:
                 st.info("No heartbeat data available")
         
