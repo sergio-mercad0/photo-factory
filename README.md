@@ -45,6 +45,21 @@ Photo_Factory/
    mkdir -p Storage/Originals
    ```
 
+## Accessing the Dashboard
+
+The Photo Factory Dashboard is available at `http://localhost:8501` by default.
+
+### Using a Friendly Hostname
+
+To access the dashboard using a friendly hostname like `photo.server`, edit your Windows hosts file:
+
+1. Open Notepad as Administrator
+2. Open: `C:\Windows\System32\drivers\etc\hosts`
+3. Add: `127.0.0.1    photo.server`
+4. Save and access: `http://photo.server:8501`
+
+See `docs/ACCESS_DASHBOARD.md` for detailed instructions and alternative methods.
+
 ## Usage
 
 ### Librarian Ingest Service

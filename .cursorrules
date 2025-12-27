@@ -99,7 +99,7 @@ Do you approve?"
         2. **Start:** Run `docker-compose up -d <service>` (or equivalent) to verify the container starts without errors.
         3. **Health Check:** Wait for health checks to pass (if configured) or verify the service is running (`docker-compose ps`).
         4. **Functionality:** Verify the service performs its intended function (e.g., process files, respond to requests, connect to database).
-        5. **Dashboard Impact:** If modifying a service that the Dashboard monitors (Librarian, Database, etc.), verify the Dashboard still displays correct data (heartbeats, metrics, status). Check that data freshness is maintained and no stale values appear.
+        5. **Dashboard Impact:** If modifying a service that the Dashboard monitors (Librarian, Database, etc.), verify the Dashboard still displays correct data (heartbeats, metrics, status). Check that data freshness is maintained and no stale values appear. If building a brand new Service, make sure it's accounted for in the Dashboard, otherwise propose new sections and metrics for the new service.
         6. **Cleanup:** Remove any test files, mock data, or temporary artifacts created during validation. This includes:
             * Test files in `Photos_Inbox/` or `Storage/` or ``Storage`/` created for testing
             * Temporary Docker volumes or containers created for validation
