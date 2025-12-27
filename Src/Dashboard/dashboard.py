@@ -293,13 +293,19 @@ def main():
         document.title = "Photo Factory Dashboard";
         </script>
         <style>
-        /* Reduce visual flash during refresh */
+        /* Reduce visual flash during refresh with better transitions */
         .stApp {
+            transition: opacity 0.2s ease-in-out;
+        }
+        /* Smooth transitions for metrics and dataframes */
+        [data-testid="stMetricValue"],
+        [data-testid="stDataFrame"],
+        [data-testid="stCode"] {
             transition: opacity 0.15s ease-in-out;
         }
-        /* Smooth transitions for metrics */
-        [data-testid="stMetricValue"] {
-            transition: opacity 0.1s ease-in-out;
+        /* Prevent layout shift during refresh */
+        .element-container {
+            min-height: 1px;
         }
         </style>
         """,
@@ -361,24 +367,9 @@ def main():
         if auto_refresh:
             st.info(f"🔄 Auto-refreshing every {refresh_interval}s")
             
-            # Track refresh state: when st_autorefresh triggers, it will rerun
-            # We detect refresh by checking if we just reran (session state persists)
-            if "refresh_timestamp" not in st.session_state:
-                st.session_state.refresh_timestamp = datetime.now()
-            
-            # Check if we're in a refresh cycle (within 1 second of expected refresh)
-            current_time = datetime.now()
-            time_since_last_refresh = (current_time - st.session_state.refresh_timestamp).total_seconds()
-            
-            # If we're close to refresh time, mark as refreshing
-            # This happens right before st_autorefresh triggers
-            if time_since_last_refresh >= refresh_interval - 0.5:
-                st.session_state.is_refreshing = True
-            else:
-                # After refresh completes, update timestamp and clear refreshing flag
-                if st.session_state.is_refreshing:
-                    st.session_state.refresh_timestamp = current_time
-                    st.session_state.is_refreshing = False
+            # Simple approach: always use fresh data, just show a subtle refresh indicator
+            # The refresh happens so fast that preserving old state causes more problems
+            st.session_state.is_refreshing = False  # Always use fresh data
             
             # Convert seconds to milliseconds for st_autorefresh
             # Use counter in key to force restart when interval changes
@@ -407,20 +398,8 @@ def main():
         # All Services Status
         st.subheader("All Services Status")
         
-        # Get new data
-        new_services_status = get_all_services_status()
-        
-        # Preserve last known state if refreshing
-        if st.session_state.is_refreshing and "last_services_status" in st.session_state:
-            # Use last known state while refreshing
-            services_status = st.session_state.last_services_status
-            is_refreshing = True
-        else:
-            # Use new data and save it
-            services_status = new_services_status
-            st.session_state.last_services_status = new_services_status
-            is_refreshing = False
-            st.session_state.is_refreshing = False
+        # Always use fresh data - caching handles performance
+        services_status = get_all_services_status()
         
         if services_status:
             # Create a table of all services
@@ -443,11 +422,7 @@ def main():
                 else:
                     status_indicator = "🔴 Not Running"
                 
-                # Add refreshing indicator if refreshing
-                if is_refreshing:
-                    status_indicator += " ⟳"
-                
-                # Heartbeat info
+                # Heartbeat info - always calculate fresh from current time
                 heartbeat_info = "N/A"
                 if svc["heartbeat"]:
                     time_since = datetime.now() - svc["heartbeat"]["last_heartbeat"]
@@ -458,10 +433,6 @@ def main():
                         heartbeat_info = f"🟡 {seconds_ago}s ago"
                     else:
                         heartbeat_info = f"🔴 {seconds_ago}s ago"
-                    
-                    # Add refreshing indicator if refreshing
-                    if is_refreshing:
-                        heartbeat_info += " ⟳"
                 
                 status_data.append({
                     "Service": svc["name"],
@@ -477,58 +448,42 @@ def main():
         
         st.markdown("---")
         
-        # Overall Statistics - preserve last known state while refreshing
+        # Overall Statistics - always use fresh data
         st.subheader("Overall Statistics")
         stats_container = st.container()
         with stats_container:
             col1, col2, col3, col4 = st.columns(4)
             
-            # Get new data
-            new_total_assets = get_total_assets()
-            new_assets_last_hour = get_assets_last_hour()
-            new_heartbeat = get_librarian_heartbeat()
-            
-            # Preserve last known state if refreshing
-            if st.session_state.is_refreshing:
-                total_assets = st.session_state.get("last_total_assets", new_total_assets)
-                assets_last_hour = st.session_state.get("last_assets_last_hour", new_assets_last_hour)
-                heartbeat = st.session_state.get("last_heartbeat", new_heartbeat)
-                refresh_indicator = " ⟳"
-            else:
-                # Save new data
-                total_assets = new_total_assets
-                assets_last_hour = new_assets_last_hour
-                heartbeat = new_heartbeat
-                st.session_state.last_total_assets = new_total_assets
-                st.session_state.last_assets_last_hour = new_assets_last_hour
-                st.session_state.last_heartbeat = new_heartbeat
-                refresh_indicator = ""
+            # Always get fresh data - caching handles performance
+            total_assets = get_total_assets()
+            assets_last_hour = get_assets_last_hour()
+            heartbeat = get_librarian_heartbeat()
             
             with col1:
-                st.metric("Total Assets Secured", f"{total_assets:,}{refresh_indicator}")
+                st.metric("Total Assets Secured", f"{total_assets:,}")
             
             with col2:
-                st.metric("Processed Last Hour", f"{assets_last_hour:,}{refresh_indicator}")
+                st.metric("Processed Last Hour", f"{assets_last_hour:,}")
             
             with col3:
                 remaining = get_remaining_files()
                 if remaining is not None:
-                    st.metric("Remaining in Inbox", f"{remaining:,}{refresh_indicator}")
+                    st.metric("Remaining in Inbox", f"{remaining:,}")
                 else:
-                    st.metric("Remaining in Inbox", f"N/A{refresh_indicator}")
+                    st.metric("Remaining in Inbox", "N/A")
             
             with col4:
                 if heartbeat:
                     time_since = datetime.now() - heartbeat["last_heartbeat"]
                     seconds_ago = int(time_since.total_seconds())
                     if seconds_ago <= 60:
-                        st.metric("Librarian Heartbeat", f"🟢 {seconds_ago}s ago{refresh_indicator}")
+                        st.metric("Librarian Heartbeat", f"🟢 {seconds_ago}s ago")
                     elif seconds_ago <= 180:
-                        st.metric("Librarian Heartbeat", f"🟡 {seconds_ago}s ago{refresh_indicator}")
+                        st.metric("Librarian Heartbeat", f"🟡 {seconds_ago}s ago")
                     else:
-                        st.metric("Librarian Heartbeat", f"🔴 {seconds_ago}s ago{refresh_indicator}")
+                        st.metric("Librarian Heartbeat", f"🔴 {seconds_ago}s ago")
                 else:
-                    st.metric("Librarian Heartbeat", f"N/A{refresh_indicator}")
+                    st.metric("Librarian Heartbeat", "N/A")
         
         st.markdown("---")
         
