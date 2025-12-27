@@ -10,7 +10,7 @@ from typing import Callable, Optional
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileSystemEvent
 
-from .utils import get_inbox_path
+from .utils import get_inbox_path, should_process_file
 
 logger = logging.getLogger("librarian.file_watcher")
 
@@ -94,6 +94,11 @@ class StableFileHandler(FileSystemEventHandler):
         try:
             # Check if file exists and is readable
             if not file_path.exists() or not file_path.is_file():
+                return
+            
+            # Apply deny list filter
+            if not should_process_file(file_path):
+                logger.debug(f"Ignoring file (deny list): {file_path.name}")
                 return
             
             # Skip if already processing
@@ -257,10 +262,12 @@ class FileWatcher:
         files_found = 0
         for file_path in self.inbox_path.rglob("*"):
             if file_path.is_file():
-                # Register for stability check
-                if self.event_handler:
-                    self.event_handler._register_file(file_path)
-                    files_found += 1
+                # Apply deny list filter before registering
+                if should_process_file(file_path):
+                    # Register for stability check
+                    if self.event_handler:
+                        self.event_handler._register_file(file_path)
+                        files_found += 1
         
         if files_found > 0:
             logger.debug(f"Registered {files_found} file(s) from inbox scan")

@@ -67,3 +67,34 @@ def ensure_directory_exists(path: Path) -> None:
     """
     path.mkdir(parents=True, exist_ok=True)
 
+
+def should_process_file(file_path: Path) -> bool:
+    """
+    Check if a file should be processed by the Librarian.
+    
+    Uses a deny list (blacklist) approach to filter out known non-media files.
+    
+    Args:
+        file_path: Path to the file to check
+    
+    Returns:
+        True if file should be processed, False if it should be ignored
+    """
+    filename = file_path.name
+    
+    # Deny list patterns (files to ignore)
+    deny_patterns = [
+        # Syncthing metadata files
+        lambda f: f.startswith("syncthing-folder-") and f.endswith(".txt"),
+        # Hidden files (starting with .)
+        # Android creates: .nomedia, .thumbnails, .trashed-*, etc.
+        lambda f: f.startswith("."),
+    ]
+    
+    # Check against deny list
+    for pattern in deny_patterns:
+        if pattern(filename):
+            return False
+    
+    return True
+

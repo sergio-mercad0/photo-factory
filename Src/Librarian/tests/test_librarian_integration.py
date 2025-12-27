@@ -305,3 +305,128 @@ class TestFullWorkflow:
         files = list(dest_folder.glob("*.jpg"))
         assert len(files) == 2
 
+
+class TestDenyListFiltering:
+    """Test that files matching deny list patterns are not processed."""
+    
+    def test_hidden_file_not_processed(
+        self, mock_paths, tmp_inbox: Path, tmp_storage: Path, create_test_file_with_date
+    ):
+        """Test that hidden files (starting with .) are not processed."""
+        # Create a hidden file
+        hidden_file = create_test_file_with_date(
+            tmp_inbox, ".nomedia", 2025, 6, 15, content=b"hidden file content"
+        )
+        
+        service = LibrarianService(
+            stability_delay=0.1,
+            min_file_age=0.1,
+            log_level="WARNING"
+        )
+        
+        # Process the file
+        service.process_file(hidden_file)
+        
+        # Verify file was NOT moved to storage
+        dest_folder = tmp_storage / "2025" / "2025-06-15"
+        assert not dest_folder.exists(), "Date folder should not be created for filtered file"
+        
+        # Verify file still exists in inbox (not processed)
+        assert hidden_file.exists(), "Hidden file should remain in inbox"
+    
+    def test_syncthing_metadata_not_processed(
+        self, mock_paths, tmp_inbox: Path, tmp_storage: Path, create_test_file_with_date
+    ):
+        """Test that Syncthing metadata files are not processed."""
+        # Create Syncthing metadata file
+        syncthing_file = create_test_file_with_date(
+            tmp_inbox,
+            "syncthing-folder-817eaa.txt",
+            2025,
+            6,
+            15,
+            content=b"syncthing metadata"
+        )
+        
+        service = LibrarianService(
+            stability_delay=0.1,
+            min_file_age=0.1,
+            log_level="WARNING"
+        )
+        
+        # Process the file
+        service.process_file(syncthing_file)
+        
+        # Verify file was NOT moved to storage
+        dest_folder = tmp_storage / "2025" / "2025-06-15"
+        assert not dest_folder.exists(), "Date folder should not be created for filtered file"
+        
+        # Verify file still exists in inbox
+        assert syncthing_file.exists(), "Syncthing metadata file should remain in inbox"
+    
+    def test_mixed_filtered_and_valid_files(
+        self, mock_paths, tmp_inbox: Path, tmp_storage: Path, create_test_file_with_date
+    ):
+        """Test that valid files are processed while filtered files are ignored."""
+        # Create a valid photo file
+        valid_file = create_test_file_with_date(
+            tmp_inbox, "photo.jpg", 2025, 6, 15, content=b"valid photo"
+        )
+        
+        # Create filtered files
+        hidden_file = create_test_file_with_date(
+            tmp_inbox, ".nomedia", 2025, 6, 15, content=b"hidden"
+        )
+        syncthing_file = create_test_file_with_date(
+            tmp_inbox,
+            "syncthing-folder-abc.txt",
+            2025,
+            6,
+            15,
+            content=b"syncthing"
+        )
+        
+        service = LibrarianService(
+            stability_delay=0.1,
+            min_file_age=0.1,
+            log_level="WARNING"
+        )
+        
+        # Process all files
+        service.process_file(valid_file)
+        service.process_file(hidden_file)
+        service.process_file(syncthing_file)
+        
+        # Verify only valid file was processed
+        dest_folder = tmp_storage / "2025" / "2025-06-15"
+        assert (dest_folder / "photo.jpg").exists(), "Valid file should be processed"
+        
+        # Verify filtered files remain in inbox
+        assert hidden_file.exists(), "Hidden file should remain in inbox"
+        assert syncthing_file.exists(), "Syncthing file should remain in inbox"
+        
+        # Verify only one file in storage
+        files_in_storage = list(dest_folder.glob("*"))
+        assert len(files_in_storage) == 1, "Only valid file should be in storage"
+    
+    def test_android_thumbnails_not_processed(
+        self, mock_paths, tmp_inbox: Path, tmp_storage: Path, create_test_file_with_date
+    ):
+        """Test that Android thumbnail files are not processed."""
+        thumbnail_file = create_test_file_with_date(
+            tmp_inbox, ".thumbnails", 2025, 6, 15, content=b"thumbnails"
+        )
+        
+        service = LibrarianService(
+            stability_delay=0.1,
+            min_file_age=0.1,
+            log_level="WARNING"
+        )
+        
+        service.process_file(thumbnail_file)
+        
+        # Verify not processed
+        dest_folder = tmp_storage / "2025" / "2025-06-15"
+        assert not dest_folder.exists()
+        assert thumbnail_file.exists()
+

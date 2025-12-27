@@ -20,6 +20,7 @@ from .utils import (
     ensure_directory_exists,
     get_storage_path,
     setup_logging,
+    should_process_file,
 )
 
 logger = logging.getLogger("librarian")
@@ -68,6 +69,11 @@ class LibrarianService:
         Args:
             file_path: Path to file in Photos_Inbox
         """
+        # Safety check: apply deny list filter
+        if not should_process_file(file_path):
+            logger.debug(f"Skipping file (deny list): {file_path.name}")
+            return
+        
         logger.info(f"Processing file: {file_path.name}")
         
         try:
