@@ -20,7 +20,7 @@ st.set_page_config(
     page_title="Photo Factory Dashboard",
     page_icon="📸",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
 # Initialize Docker client
@@ -124,54 +124,70 @@ def get_remaining_files() -> Optional[int]:
 
 def main():
     """Main dashboard function."""
+    # Set page title via JavaScript to prevent flickering
+    st.markdown(
+        """
+        <script>
+        document.title = "Photo Factory Dashboard";
+        </script>
+        """,
+        unsafe_allow_html=True
+    )
+    
     st.title("📸 Photo Factory Dashboard")
     st.markdown("---")
     
     # Check database connection
     db_connected = check_database_connection()
     
-    # Sidebar
+    # Auto-refresh in sidebar (minimal)
     with st.sidebar:
-        st.header("System Status")
-        
-        # Database status
-        db_status = "🟢 Connected" if db_connected else "🔴 Disconnected"
-        st.write(f"**Database:** {db_status}")
-        
-        # Docker status
-        docker_status = "🟢 Available" if DOCKER_AVAILABLE else "🔴 Unavailable"
-        st.write(f"**Docker:** {docker_status}")
-        
-        st.markdown("---")
-        
-        # Auto-refresh toggle
         auto_refresh = st.checkbox("Auto-refresh", value=True)
-        refresh_interval = st.slider("Refresh interval (seconds)", 5, 60, 10)
+        refresh_interval = st.slider("Interval (sec)", 5, 60, 10)
         
         if auto_refresh:
+            # Use JavaScript to auto-refresh the page
+            st.markdown(
+                f"""
+                <script>
+                setTimeout(function(){{
+                    window.location.reload();
+                }}, {refresh_interval * 1000});
+                </script>
+                """,
+                unsafe_allow_html=True
+            )
+        
+        if st.button("🔄 Refresh Now"):
             st.rerun()
     
-    # Main content
-    col1, col2, col3, col4 = st.columns(4)
+    # System Status Row
+    st.subheader("System Status")
+    status_col1, status_col2, status_col3 = st.columns(3)
     
-    # Status indicators
-    with col1:
-        st.subheader("Librarian Status")
+    with status_col1:
+        db_status = "🟢 Connected" if db_connected else "🔴 Disconnected"
+        st.write(f"**Database:** {db_status}")
+    
+    with status_col2:
+        docker_status = "🟢 Available" if DOCKER_AVAILABLE else "🔴 Unavailable"
+        st.write(f"**Docker:** {docker_status}")
+    
+    with status_col3:
         container_status = get_container_status("librarian")
-        
         if container_status:
             if container_status["running"]:
                 health = container_status.get("health", "unknown")
                 if health == "healthy":
-                    st.success("🟢 Running (Healthy)")
+                    st.write("**Librarian:** 🟢 Running (Healthy)")
                 elif health == "unhealthy":
-                    st.error("🔴 Running (Unhealthy)")
+                    st.write("**Librarian:** 🔴 Running (Unhealthy)")
                 else:
-                    st.info(f"🟡 Running ({health})")
+                    st.write(f"**Librarian:** 🟡 Running ({health})")
             else:
-                st.error(f"🔴 {container_status['status']}")
+                st.write(f"**Librarian:** 🔴 {container_status['status']}")
         else:
-            st.warning("⚠️ Status unavailable")
+            st.write("**Librarian:** ⚠️ Status unavailable")
         
         # Heartbeat indicator
         heartbeat = get_librarian_heartbeat()
@@ -187,34 +203,39 @@ def main():
             if heartbeat.current_task:
                 st.caption(f"Task: {heartbeat.current_task}")
     
-    # Big numbers
+    st.markdown("---")
+    
+    # Stats Row - Big Numbers
+    st.subheader("Statistics")
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("Total Assets Secured", f"{get_total_assets():,}")
+    
     with col2:
-        st.subheader("Total Assets")
-        total = get_total_assets()
-        st.metric("Processed", f"{total:,}")
+        st.metric("Processed Last Hour", f"{get_assets_last_hour():,}")
     
     with col3:
-        st.subheader("Last Hour")
-        last_hour = get_assets_last_hour()
-        st.metric("Processed", f"{last_hour:,}")
-    
-    with col4:
-        st.subheader("Remaining")
         remaining = get_remaining_files()
         if remaining is not None:
-            st.metric("In Inbox", f"{remaining:,}")
+            st.metric("Remaining in Inbox", f"{remaining:,}")
         else:
-            st.metric("In Inbox", "N/A")
-            st.caption("Calculation not available")
+            st.metric("Remaining in Inbox", "N/A")
+    
+    with col4:
+        if heartbeat:
+            time_since = datetime.now() - heartbeat.last_heartbeat
+            st.metric("Last Heartbeat", f"{int(time_since.total_seconds())}s ago")
+        else:
+            st.metric("Last Heartbeat", "N/A")
     
     st.markdown("---")
     
-    # Recent activity
-    st.subheader("Recent Activity")
+    # Latest Processed Files
+    st.subheader("📁 Latest Processed Files")
     recent_assets = get_recent_assets(limit=10)
     
     if recent_assets:
-        # Create dataframe for display
         try:
             import pandas as pd
         except ImportError:
@@ -234,23 +255,25 @@ def main():
         df = pd.DataFrame(data)
         st.dataframe(df, use_container_width=True, hide_index=True)
     else:
-        st.info("No recent activity")
+        st.info("No files processed yet")
     
     st.markdown("---")
     
-    # Logs section (expandable)
-    with st.expander("📋 Service Logs", expanded=False):
-        st.subheader("Librarian Logs")
-        
-        if container_status and container_status["running"]:
-            try:
-                container = docker_client.containers.get("librarian")
-                logs = container.logs(tail=50, timestamps=True).decode("utf-8")
-                st.code(logs, language=None)
-            except Exception as e:
-                st.error(f"Error fetching logs: {e}")
-        else:
-            st.warning("Container not running or unavailable")
+    # Most Recent Logs
+    st.subheader("📋 Most Recent Logs")
+    
+    if container_status and container_status["running"] and DOCKER_AVAILABLE:
+        try:
+            container = docker_client.containers.get("librarian")
+            logs = container.logs(tail=100, timestamps=True).decode("utf-8")
+            # Split logs into lines and show most recent
+            log_lines = logs.strip().split('\n')
+            recent_logs = '\n'.join(log_lines[-50:])  # Show last 50 lines
+            st.code(recent_logs, language=None)
+        except Exception as e:
+            st.error(f"Error fetching logs: {e}")
+    else:
+        st.warning("Container not running or Docker unavailable")
 
 
 if __name__ == "__main__":
