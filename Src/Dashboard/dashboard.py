@@ -297,11 +297,13 @@ def main():
     
     # Auto-refresh in sidebar (minimal)
     with st.sidebar:
-        # Initialize session state
+        # Initialize session state (persists across reruns)
         if "auto_refresh_enabled" not in st.session_state:
             st.session_state.auto_refresh_enabled = True
         if "refresh_interval" not in st.session_state:
             st.session_state.refresh_interval = 10
+        if "last_rerun_time" not in st.session_state:
+            st.session_state.last_rerun_time = datetime.now()
         
         auto_refresh = st.checkbox("Auto-refresh", value=st.session_state.auto_refresh_enabled, key="auto_refresh_checkbox")
         refresh_interval = st.slider("Interval (sec)", 5, 60, st.session_state.refresh_interval, key="refresh_interval_slider")
@@ -311,41 +313,17 @@ def main():
         st.session_state.refresh_interval = refresh_interval
         
         if st.button("🔄 Refresh Now", key="refresh_button"):
+            st.session_state.last_rerun_time = datetime.now()
             st.rerun()
         
-        # Auto-refresh countdown and trigger (client-side JavaScript)
+        # Show countdown and status
         if auto_refresh:
-            st.markdown(f'<div id="refresh-countdown">🔄 Next refresh in {refresh_interval}s</div>', unsafe_allow_html=True)
-            st.markdown(
-                f"""
-                <script>
-                (function() {{
-                    const interval = {refresh_interval};
-                    let timeLeft = interval;
-                    const countdownEl = document.getElementById('refresh-countdown');
-                    
-                    // Update countdown every second
-                    const countdownInterval = setInterval(function() {{
-                        timeLeft--;
-                        if (countdownEl) {{
-                            if (timeLeft > 0) {{
-                                countdownEl.textContent = '🔄 Next refresh in ' + timeLeft + 's';
-                            }} else {{
-                                countdownEl.textContent = '🔄 Refreshing...';
-                            }}
-                        }}
-                    }}, 1000);
-                    
-                    // Reload page after interval
-                    setTimeout(function() {{
-                        clearInterval(countdownInterval);
-                        window.location.reload();
-                    }}, interval * 1000);
-                }})();
-                </script>
-                """,
-                unsafe_allow_html=True
-            )
+            time_since_rerun = (datetime.now() - st.session_state.last_rerun_time).total_seconds()
+            time_remaining = max(0, refresh_interval - time_since_rerun)
+            if time_remaining > 0:
+                st.info(f"🔄 Next refresh in {int(time_remaining)}s")
+            else:
+                st.info("🔄 Refreshing...")
     
     # Show service-specific or all services data
     if selected_service == "All Services":
