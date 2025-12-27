@@ -360,15 +360,25 @@ def main():
         # Use streamlit-autorefresh for reliable auto-refresh
         if auto_refresh:
             st.info(f"🔄 Auto-refreshing every {refresh_interval}s")
-            # Mark as refreshing before the refresh happens
-            # We'll detect the refresh by checking if this is a rerun
-            if st.session_state.get("last_rerun_time"):
-                time_since_rerun = (datetime.now() - st.session_state.last_rerun_time).total_seconds()
-                # If we're close to refresh time, mark as refreshing
-                if time_since_rerun >= refresh_interval * 0.9:
-                    st.session_state.is_refreshing = True
+            
+            # Track refresh state: when st_autorefresh triggers, it will rerun
+            # We detect refresh by checking if we just reran (session state persists)
+            if "refresh_timestamp" not in st.session_state:
+                st.session_state.refresh_timestamp = datetime.now()
+            
+            # Check if we're in a refresh cycle (within 1 second of expected refresh)
+            current_time = datetime.now()
+            time_since_last_refresh = (current_time - st.session_state.refresh_timestamp).total_seconds()
+            
+            # If we're close to refresh time, mark as refreshing
+            # This happens right before st_autorefresh triggers
+            if time_since_last_refresh >= refresh_interval - 0.5:
+                st.session_state.is_refreshing = True
             else:
-                st.session_state.last_rerun_time = datetime.now()
+                # After refresh completes, update timestamp and clear refreshing flag
+                if st.session_state.is_refreshing:
+                    st.session_state.refresh_timestamp = current_time
+                    st.session_state.is_refreshing = False
             
             # Convert seconds to milliseconds for st_autorefresh
             # Use counter in key to force restart when interval changes
@@ -376,9 +386,6 @@ def main():
                 interval=refresh_interval * 1000, 
                 key=f"dashboard_refresh_{st.session_state.refresh_key_counter}"
             )
-            
-            # Update last rerun time after refresh
-            st.session_state.last_rerun_time = datetime.now()
     
     # Show service-specific or all services data
     if selected_service == "All Services":
