@@ -122,6 +122,80 @@ def get_remaining_files() -> Optional[int]:
     return None
 
 
+def get_available_services() -> list:
+    """Get list of available Docker services."""
+    if not DOCKER_AVAILABLE:
+        return []
+    
+    try:
+        # Get all containers with the photo-factory prefix or known service names
+        containers = docker_client.containers.list(all=True)
+        service_names = []
+        known_services = ["librarian", "dashboard", "factory-db", "factory_postgres", "syncthing"]
+        
+        for container in containers:
+            name = container.name
+            # Check if it's a known service or has photo-factory in the name
+            if any(known in name for known in known_services) or "photo-factory" in name.lower():
+                service_names.append(name)
+        
+        # Remove duplicates and sort
+        return sorted(list(set(service_names)))
+    except Exception as e:
+        logger.error(f"Error getting available services: {e}")
+        return []
+
+
+def get_service_logs(service_name: str, tail: int = 100) -> str:
+    """
+    Get logs from a specific service.
+    
+    Args:
+        service_name: Name of the Docker container/service
+        tail: Number of lines to retrieve
+    
+    Returns:
+        Logs as string, or empty string if error
+    """
+    if not DOCKER_AVAILABLE:
+        return ""
+    
+    try:
+        container = docker_client.containers.get(service_name)
+        logs = container.logs(tail=tail, timestamps=True).decode("utf-8")
+        return logs
+    except docker.errors.NotFound:
+        return f"[Service '{service_name}' not found]"
+    except Exception as e:
+        logger.error(f"Error fetching logs from {service_name}: {e}")
+        return f"[Error fetching logs from {service_name}: {e}]"
+
+
+def get_all_logs(services: list, tail: int = 100) -> str:
+    """
+    Get and combine logs from all services.
+    
+    Args:
+        services: List of service names
+        tail: Number of lines per service
+    
+    Returns:
+        Combined logs with service headers
+    """
+    all_logs = []
+    
+    for service in services:
+        logs = get_service_logs(service, tail=tail)
+        if logs:
+            # Add service header
+            all_logs.append(f"\n{'='*80}")
+            all_logs.append(f"SERVICE: {service}")
+            all_logs.append(f"{'='*80}\n")
+            all_logs.append(logs)
+    
+    return "\n".join(all_logs)
+
+
 def main():
     """Main dashboard function."""
     # Set page title via JavaScript to prevent flickering
@@ -259,21 +333,64 @@ def main():
     
     st.markdown("---")
     
-    # Most Recent Logs
-    st.subheader("📋 Most Recent Logs")
+    # Most Recent Logs with Service Selector
+    log_col1, log_col2 = st.columns([1, 4])
     
-    if container_status and container_status["running"] and DOCKER_AVAILABLE:
-        try:
-            container = docker_client.containers.get("librarian")
-            logs = container.logs(tail=100, timestamps=True).decode("utf-8")
-            # Split logs into lines and show most recent
-            log_lines = logs.strip().split('\n')
-            recent_logs = '\n'.join(log_lines[-50:])  # Show last 50 lines
-            st.code(recent_logs, language=None)
-        except Exception as e:
-            st.error(f"Error fetching logs: {e}")
-    else:
-        st.warning("Container not running or Docker unavailable")
+    with log_col1:
+        st.subheader("📋 Service Logs")
+        
+        # Get available services
+        available_services = get_available_services()
+        
+        if available_services:
+            # Add "All Services" option at the beginning
+            service_options = ["All Services"] + available_services
+            
+            selected_service = st.selectbox(
+                "Filter by service:",
+                options=service_options,
+                index=0,  # Default to "All Services"
+                key="service_selector"
+            )
+        else:
+            selected_service = None
+            st.warning("No services available")
+    
+    with log_col2:
+        if not DOCKER_AVAILABLE:
+            st.warning("Docker unavailable - cannot fetch logs")
+        elif selected_service:
+            if selected_service == "All Services":
+                # Show logs from all services
+                st.subheader("All Services Logs")
+                all_logs = get_all_logs(available_services, tail=50)
+                
+                if all_logs:
+                    # Split into lines, sort by timestamp, and show most recent
+                    log_lines = []
+                    for line in all_logs.split('\n'):
+                        if line.strip():
+                            log_lines.append(line)
+                    
+                    # Show last 100 lines total
+                    recent_logs = '\n'.join(log_lines[-100:])
+                    st.code(recent_logs, language=None)
+                else:
+                    st.info("No logs available")
+            else:
+                # Show logs from selected service
+                st.subheader(f"Logs: {selected_service}")
+                logs = get_service_logs(selected_service, tail=100)
+                
+                if logs:
+                    # Split logs into lines and show most recent
+                    log_lines = logs.strip().split('\n')
+                    recent_logs = '\n'.join(log_lines[-50:])  # Show last 50 lines
+                    st.code(recent_logs, language=None)
+                else:
+                    st.info(f"No logs available for {selected_service}")
+        else:
+            st.info("Select a service to view logs")
 
 
 if __name__ == "__main__":
