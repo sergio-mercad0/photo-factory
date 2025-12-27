@@ -10,8 +10,8 @@ import docker
 import streamlit as st
 from sqlalchemy import func
 
-from Shared.database import get_db_session, check_database_connection
-from Shared.models import MediaAsset, SystemStatus
+from Src.Shared.database import get_db_session, check_database_connection
+from Src.Shared.models import MediaAsset, SystemStatus
 
 logger = logging.getLogger("dashboard")
 

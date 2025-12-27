@@ -10,8 +10,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from Shared.database import get_db_session, init_database, check_database_connection
-from Shared.models import MediaAsset
+from Src.Shared.database import get_db_session, init_database, check_database_connection
+from Src.Shared.models import MediaAsset
 
 from .collision_handler import (
     calculate_file_hash,

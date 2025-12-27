@@ -8,7 +8,6 @@ WORKDIR /build
 # Install system dependencies (for exiftool)
 RUN apt-get update && apt-get install -y \
     gcc \
-    libexiftool-dev \
     libimage-exiftool-perl \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
@@ -36,7 +35,6 @@ WORKDIR /app
 
 # Install runtime dependencies (exiftool for metadata extraction)
 RUN apt-get update && apt-get install -y \
-    libexiftool-dev \
     libimage-exiftool-perl \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*

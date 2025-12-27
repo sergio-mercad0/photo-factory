@@ -8,8 +8,8 @@ import threading
 import time
 from typing import Optional
 
-from Shared.database import get_db_session
-from Shared.models import SystemStatus
+from Src.Shared.database import get_db_session
+from Src.Shared.models import SystemStatus
 
 logger = logging.getLogger("librarian.heartbeat")
 
