@@ -345,28 +345,68 @@ def get_all_logs(services: list, tail: int = 100) -> str:
 
 
 # Initialize heartbeat service (runs in background thread)
-_heartbeat_service: Optional[HeartbeatService] = None
+# Use @st.cache_resource to ensure heartbeat persists across Streamlit reruns
+_heartbeat_service_instance = None
+
+@st.cache_resource
+def _get_heartbeat_service():
+    """
+    Get or create heartbeat service for dashboard.
+    
+    Uses @st.cache_resource to ensure this only runs once and persists
+    across Streamlit script reruns. This is critical because Streamlit
+    reruns the entire script on every interaction, but we need the
+    heartbeat thread to persist.
+    """
+    global _heartbeat_service_instance
+    if _heartbeat_service_instance is not None:
+        return _heartbeat_service_instance
+    
+    try:
+        # Initialize database (ensures tables exist)
+        init_database()
+        
+        # Start heartbeat service (5 minute interval)
+        # Note: HeartbeatService now writes initial heartbeat immediately on start()
+        heartbeat_service = HeartbeatService(service_name="dashboard", interval=300.0)
+        heartbeat_service.set_current_task("Dashboard running")
+        heartbeat_service.start()
+        
+        _heartbeat_service_instance = heartbeat_service
+        logger.info("Dashboard heartbeat service started")
+        return heartbeat_service
+    except Exception as e:
+        logger.error(f"Failed to initialize heartbeat: {e}", exc_info=True)
+        return None
 
 def _init_heartbeat():
-    """Initialize heartbeat service for dashboard."""
-    global _heartbeat_service
-    if _heartbeat_service is None:
-        try:
-            # Initialize database (ensures tables exist)
-            init_database()
-            
-            # Start heartbeat service (5 minute interval)
-            _heartbeat_service = HeartbeatService(service_name="dashboard", interval=300.0)
-            _heartbeat_service.set_current_task("Dashboard running")
-            _heartbeat_service.start()
-            logger.info("Dashboard heartbeat service started")
-        except Exception as e:
-            logger.error(f"Failed to initialize heartbeat: {e}", exc_info=True)
+    """Initialize heartbeat service (wrapper to ensure it's called)."""
+    try:
+        return _get_heartbeat_service()
+    except Exception as e:
+        # Fallback if @st.cache_resource fails (e.g., outside Streamlit context)
+        logger.warning(f"@st.cache_resource failed, using fallback: {e}")
+        global _heartbeat_service_instance
+        if _heartbeat_service_instance is None:
+            try:
+                init_database()
+                heartbeat_service = HeartbeatService(service_name="dashboard", interval=300.0)
+                heartbeat_service.set_current_task("Dashboard running")
+                heartbeat_service.start()
+                _heartbeat_service_instance = heartbeat_service
+                logger.info("Dashboard heartbeat service started (fallback)")
+                return heartbeat_service
+            except Exception as e2:
+                logger.error(f"Fallback initialization failed: {e2}", exc_info=True)
+                return None
+        return _heartbeat_service_instance
 
 def main():
     """Main dashboard function."""
-    # Initialize heartbeat on first run
-    _init_heartbeat()
+    # Initialize heartbeat on first run (cached by @st.cache_resource)
+    heartbeat_service = _init_heartbeat()
+    if heartbeat_service is None:
+        logger.warning("Dashboard heartbeat service failed to initialize")
     # Set page title and add CSS to reduce visual flash
     st.markdown(
         """

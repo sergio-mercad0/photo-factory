@@ -95,14 +95,24 @@ class HeartbeatService:
         """Main heartbeat loop (runs in thread)."""
         logger.info(f"Heartbeat service started for {self.service_name} (interval: {self.interval}s)")
         
+        # Write initial heartbeat immediately (don't wait for first interval)
+        try:
+            self._update_heartbeat()
+        except Exception as e:
+            logger.error(f"Error writing initial heartbeat: {e}", exc_info=True)
+        
         while not self._stop_event.is_set():
+            # Wait for next interval (or stop if event is set)
+            self._stop_event.wait(self.interval)
+            
+            # Check if we should stop (event might have been set during wait)
+            if self._stop_event.is_set():
+                break
+            
             try:
                 self._update_heartbeat()
             except Exception as e:
                 logger.error(f"Error in heartbeat loop: {e}", exc_info=True)
-            
-            # Wait for next interval (or stop if event is set)
-            self._stop_event.wait(self.interval)
         
         logger.info(f"Heartbeat service stopped for {self.service_name}")
     
