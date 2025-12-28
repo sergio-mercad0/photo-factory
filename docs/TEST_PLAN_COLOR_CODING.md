@@ -213,13 +213,26 @@ class TestColorCodingEndToEnd:
 
 ## Success Criteria
 
-- ✅ Syncthing at 109s shows 🟢 (green)
+### Syncthing (5-minute / 300s interval):
+- ✅ Syncthing at 109s shows 🟢 (green) - **CRITICAL: This is the reported bug**
+- ✅ Syncthing at 250s shows 🟢 (green)
+- ✅ Syncthing at 299s shows 🟢 (green) - edge case: just under threshold
+- ✅ Syncthing at 300s shows 🟡 (yellow) - edge case: exactly at interval
 - ✅ Syncthing at 350s shows 🟡 (yellow)
-- ✅ Syncthing at 600s shows 🔴 (red)
+- ✅ Syncthing at 450s shows 🟡 (yellow)
+- ✅ Syncthing at 599s shows 🟡 (yellow) - edge case: just under 2x threshold
+- ✅ Syncthing at 600s shows 🔴 (red) - edge case: exactly 2x interval
+- ✅ Syncthing at 900s shows 🔴 (red)
+
+### Librarian (1-minute / 60s interval):
 - ✅ Librarian at 41s shows 🟢 (green)
 - ✅ Librarian at 90s shows 🟡 (yellow)
 - ✅ Librarian at 120s shows 🔴 (red)
+
+### General:
 - ✅ All edge cases handled correctly
+- ✅ Service name mapping works correctly
+- ✅ Ratio calculations are accurate
 
 ## Next Steps After Tests
 
