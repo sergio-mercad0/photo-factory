@@ -570,10 +570,13 @@ def main():
                     time_since = datetime.now() - svc["heartbeat"]["last_heartbeat"]
                     seconds_ago = int(time_since.total_seconds())
                     
-                    # Simple color logic: <=60 green, <=180 yellow, >180 red
-                    if seconds_ago <= 60:
+                    # Color logic relative to max_interval:
+                    # - <= max_interval: green (within expected interval)
+                    # - <= max_interval * 2: yellow (late but not critical)
+                    # - > max_interval * 2: red (very late, critical)
+                    if seconds_ago <= max_interval:
                         color = "🟢"
-                    elif seconds_ago <= 180:
+                    elif seconds_ago <= max_interval * 2:
                         color = "🟡"
                     else:
                         color = "🔴"
@@ -624,9 +627,10 @@ def main():
                     max_interval = 60  # Librarian updates every 60 seconds
                     time_since = datetime.now() - heartbeat["last_heartbeat"]
                     seconds_ago = int(time_since.total_seconds())
-                    if seconds_ago <= 60:
+                    # Color logic relative to max_interval
+                    if seconds_ago <= max_interval:
                         st.metric("Librarian Heartbeat", f"🟢 {seconds_ago}s/{max_interval}s ago")
-                    elif seconds_ago <= 180:
+                    elif seconds_ago <= max_interval * 2:
                         st.metric("Librarian Heartbeat", f"🟡 {seconds_ago}s/{max_interval}s ago")
                     else:
                         st.metric("Librarian Heartbeat", f"🔴 {seconds_ago}s/{max_interval}s ago")
@@ -724,9 +728,10 @@ def main():
                 max_interval = service_max_intervals.get(service_name_for_heartbeat, 300)  # Default to 5 minutes
                 time_since = datetime.now() - heartbeat["last_heartbeat"]
                 seconds_ago = int(time_since.total_seconds())
-                if seconds_ago <= 60:
+                # Color logic relative to max_interval
+                if seconds_ago <= max_interval:
                     st.success(f"💓 Heartbeat: {seconds_ago}s/{max_interval}s ago")
-                elif seconds_ago <= 180:
+                elif seconds_ago <= max_interval * 2:
                     st.warning(f"💓 Heartbeat: {seconds_ago}s/{max_interval}s ago")
                 else:
                     st.error(f"💓 Heartbeat: {seconds_ago}s/{max_interval}s ago")

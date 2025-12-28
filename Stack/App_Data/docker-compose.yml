@@ -179,6 +179,12 @@ services:
       syncthing:
         condition: service_started
     restart: always
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 2m
+      timeout: 5s
+      retries: 2
+      start_period: 60s
     command: ["python", "-m", "Src.Shared.service_monitor"]
 
 volumes:
