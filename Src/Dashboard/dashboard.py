@@ -192,12 +192,21 @@ def get_all_services_status() -> list:
     available_services = get_available_services()
     
     # Map container names to service names in database
+    # Services without heartbeats are mapped to None (they'll still appear in dashboard)
     container_to_service_map = {
+        # Photo Factory core services (with heartbeats)
         "librarian": "librarian",
         "dashboard": "dashboard",
         "factory_postgres": "factory-db",
         "syncthing": "syncthing",
-        "service_monitor": None,  # Monitor doesn't have its own heartbeat (container_name from docker-compose)
+        "service_monitor": None,  # Monitor doesn't have its own heartbeat
+        # Immich services (no heartbeats, but should appear in dashboard)
+        "immich_server": None,
+        "immich_machine_learning": None,
+        "immich_redis": None,
+        "immich_postgres": None,
+        # Other services
+        "homepage": None,
     }
     
     for container_name in available_services:
@@ -229,13 +238,21 @@ def get_available_services() -> list:
         # Get all containers - filter for Photo Factory services
         containers = docker_client.containers.list(all=True)
         service_names = []
+        # ALL Photo Factory services - must include everything from docker-compose.yml
         known_services = [
+            # Photo Factory core services
             "librarian", 
             "dashboard", 
             "factory-db", 
             "factory_postgres", 
             "syncthing", 
-            "service_monitor"  # Container name (matches container_name in docker-compose.yml)
+            "service_monitor",
+            # Immich services
+            "immich_server",
+            "immich_machine_learning",
+            "immich_redis",
+            "immich_postgres",
+            "homepage",
         ]
         
         # Also check image names for photo-factory prefix
@@ -272,7 +289,7 @@ def get_available_services() -> list:
     except Exception as e:
         logger.error(f"Error getting available services: {e}")
         # Return known services as fallback
-        return ["librarian", "dashboard", "factory_postgres", "syncthing"]
+        return ["librarian", "dashboard", "factory_postgres", "syncthing", "service_monitor", "immich_server", "immich_machine_learning", "immich_redis", "immich_postgres", "homepage"]
 
 
 @st.cache_data(ttl=2)  # Cache for 2 seconds (logs change frequently)
@@ -486,48 +503,43 @@ def main():
                 else:
                     status_indicator = "🔴 Not Running"
                 
-                # Heartbeat info - show elapsed/expected with ratio-based color coding
+                # Heartbeat info - always calculate fresh from current time
+                # Format: <elapsed_time>s/<max_interval>s (e.g., 231s/300s or 56s/60s)
                 heartbeat_info = "N/A"
                 if svc["heartbeat"]:
-                    # Map service names to their expected heartbeat intervals (in seconds)
-                    service_intervals = {
+                    # Map service names to their max expected intervals (in seconds)
+                    service_max_intervals = {
                         "librarian": 60,      # Updates every 60 seconds
                         "dashboard": 300,     # Updates every 5 minutes
                         "factory-db": 300,    # Monitored every 5 minutes
                         "syncthing": 300,     # Monitored every 5 minutes
                     }
                     
-                    # Get service name from mapping (use service_name if available, otherwise derive from container name)
-                    container_name = svc["name"]  # Always get container name for display/debugging
-                    service_name_for_interval = svc.get("service_name")
-                    if not service_name_for_interval:
-                        # Derive service name from container name
-                        if container_name == "factory_postgres":
-                            service_name_for_interval = "factory-db"
-                        elif container_name == "syncthing":
-                            service_name_for_interval = "syncthing"
-                        else:
-                            service_name_for_interval = container_name.split("_")[0] if "_" in container_name else container_name
+                    # Get service name for interval lookup
+                    service_name = svc.get("service_name")
+                    container_name = svc["name"]
                     
-                    expected_interval = service_intervals.get(service_name_for_interval, 300)  # Default to 5 minutes
+                    # Determine max interval based on service name
+                    if service_name and service_name in service_max_intervals:
+                        max_interval = service_max_intervals[service_name]
+                    elif container_name == "factory_postgres":
+                        max_interval = 300  # factory-db
+                    else:
+                        max_interval = 300  # Default to 5 minutes
                     
                     time_since = datetime.now() - svc["heartbeat"]["last_heartbeat"]
                     seconds_ago = int(time_since.total_seconds())
-                    ratio = seconds_ago / expected_interval if expected_interval > 0 else 0
                     
-                    # Debug logging for color coding issues (especially syncthing at 109s bug)
-                    if container_name == "syncthing" and seconds_ago < 300:
-                        logger.info(f"Syncthing color debug: seconds_ago={seconds_ago}, expected_interval={expected_interval}, ratio={ratio:.3f}, service_name={service_name_for_interval}, calculated_color={'🟢' if ratio < 1.0 else '🟡' if ratio < 2.0 else '🔴'}")
-                    
-                    # Color based on ratio: <1.0 = green, 1.0-2.0 = yellow, >=2.0 = red
-                    if ratio < 1.0:
+                    # Simple color logic: <=60 green, <=180 yellow, >180 red
+                    if seconds_ago <= 60:
                         color = "🟢"
-                    elif ratio < 2.0:
+                    elif seconds_ago <= 180:
                         color = "🟡"
                     else:
                         color = "🔴"
                     
-                    heartbeat_info = f"{color} {seconds_ago}/{expected_interval}s ago"
+                    # Format: "231s/300s ago" or "56s/60s ago"
+                    heartbeat_info = f"{color} {seconds_ago}s/{max_interval}s ago"
                 
                 status_data.append({
                     "Service": svc["name"],
@@ -569,20 +581,15 @@ def main():
             
             with col4:
                 if heartbeat:
-                    expected_interval = 60  # Librarian updates every 60 seconds
+                    max_interval = 60  # Librarian updates every 60 seconds
                     time_since = datetime.now() - heartbeat["last_heartbeat"]
                     seconds_ago = int(time_since.total_seconds())
-                    ratio = seconds_ago / expected_interval
-                    
-                    # Color based on ratio: <1.0 = green, 1.0-2.0 = yellow, >=2.0 = red
-                    if ratio < 1.0:
-                        color = "🟢"
-                    elif ratio < 2.0:
-                        color = "🟡"
+                    if seconds_ago <= 60:
+                        st.metric("Librarian Heartbeat", f"🟢 {seconds_ago}s/{max_interval}s ago")
+                    elif seconds_ago <= 180:
+                        st.metric("Librarian Heartbeat", f"🟡 {seconds_ago}s/{max_interval}s ago")
                     else:
-                        color = "🔴"
-                    
-                    st.metric("Librarian Heartbeat", f"{color} {seconds_ago}/{expected_interval}s ago")
+                        st.metric("Librarian Heartbeat", f"🔴 {seconds_ago}s/{max_interval}s ago")
                 else:
                     st.metric("Librarian Heartbeat", "N/A")
         
@@ -665,8 +672,8 @@ def main():
             
             heartbeat = get_service_heartbeat(service_name_for_heartbeat)
             
-            # Map service names to their expected heartbeat intervals (in seconds)
-            service_intervals = {
+            # Map service names to their max expected intervals (in seconds)
+            service_max_intervals = {
                 "librarian": 60,      # Updates every 60 seconds
                 "dashboard": 300,     # Updates every 5 minutes
                 "factory-db": 300,    # Monitored every 5 minutes
@@ -674,18 +681,15 @@ def main():
             }
             
             if heartbeat:
-                expected_interval = service_intervals.get(service_name_for_heartbeat, 300)  # Default to 5 minutes
+                max_interval = service_max_intervals.get(service_name_for_heartbeat, 300)  # Default to 5 minutes
                 time_since = datetime.now() - heartbeat["last_heartbeat"]
                 seconds_ago = int(time_since.total_seconds())
-                ratio = seconds_ago / expected_interval
-                
-                # Color based on ratio: <1.0 = green, 1.0-2.0 = yellow, >=2.0 = red
-                if ratio < 1.0:
-                    st.success(f"💓 Heartbeat: {seconds_ago}/{expected_interval}s ago")
-                elif ratio < 2.0:
-                    st.warning(f"💓 Heartbeat: {seconds_ago}/{expected_interval}s ago")
+                if seconds_ago <= 60:
+                    st.success(f"💓 Heartbeat: {seconds_ago}s/{max_interval}s ago")
+                elif seconds_ago <= 180:
+                    st.warning(f"💓 Heartbeat: {seconds_ago}s/{max_interval}s ago")
                 else:
-                    st.error(f"💓 Heartbeat: {seconds_ago}/{expected_interval}s ago")
+                    st.error(f"💓 Heartbeat: {seconds_ago}s/{max_interval}s ago")
                 
                 if heartbeat.get("current_task"):
                     st.caption(f"Current Task: {heartbeat['current_task']}")

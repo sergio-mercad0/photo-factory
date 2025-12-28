@@ -358,3 +358,4 @@ class TestColorCodingEndToEnd:
                         
                         assert color == "🟢", f"Expected green for 109s (ratio {ratio}), got {color}"
 
+
