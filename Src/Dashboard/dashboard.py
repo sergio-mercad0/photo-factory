@@ -498,10 +498,10 @@ def main():
                     }
                     
                     # Get service name from mapping (use service_name if available, otherwise derive from container name)
+                    container_name = svc["name"]  # Always get container name for display/debugging
                     service_name_for_interval = svc.get("service_name")
                     if not service_name_for_interval:
                         # Derive service name from container name
-                        container_name = svc["name"]
                         if container_name == "factory_postgres":
                             service_name_for_interval = "factory-db"
                         elif container_name == "syncthing":
@@ -514,6 +514,10 @@ def main():
                     time_since = datetime.now() - svc["heartbeat"]["last_heartbeat"]
                     seconds_ago = int(time_since.total_seconds())
                     ratio = seconds_ago / expected_interval if expected_interval > 0 else 0
+                    
+                    # Debug logging for color coding issues (especially syncthing at 109s bug)
+                    if container_name == "syncthing" and seconds_ago < 300:
+                        logger.info(f"Syncthing color debug: seconds_ago={seconds_ago}, expected_interval={expected_interval}, ratio={ratio:.3f}, service_name={service_name_for_interval}, calculated_color={'🟢' if ratio < 1.0 else '🟡' if ratio < 2.0 else '🔴'}")
                     
                     # Color based on ratio: <1.0 = green, 1.0-2.0 = yellow, >=2.0 = red
                     if ratio < 1.0:
@@ -656,6 +660,8 @@ def main():
             # Map container names to service names
             if selected_service == "factory_postgres":
                 service_name_for_heartbeat = "factory-db"
+            elif selected_service == "syncthing":
+                service_name_for_heartbeat = "syncthing"  # Explicit mapping for syncthing
             
             heartbeat = get_service_heartbeat(service_name_for_heartbeat)
             
