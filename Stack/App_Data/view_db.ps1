@@ -20,6 +20,8 @@ function Show-Help {
     Write-Host "  tables        - List all tables"
     Write-Host "  assets        - Show all media assets"
     Write-Host "  assets-recent - Show 10 most recent assets"
+    Write-Host "  assets-status - Show asset processing status flags"
+    Write-Host "  assets-pending - Show counts of assets pending processing"
     Write-Host "  status        - Show system status (current heartbeats)"
     Write-Host "  history       - Show system status history (last 20 records)"
     Write-Host "  history-count - Show history record counts per service"
@@ -133,6 +135,22 @@ switch ($Command.ToLower()) {
     "assets-recent" {
         Write-Host "Showing 10 most recent assets..." -ForegroundColor Yellow
         Invoke-Query "SELECT original_name, file_hash, size_bytes, captured_at, ingested_at FROM media_assets ORDER BY ingested_at DESC LIMIT 10;"
+    }
+    "assets-status" {
+        Write-Host "Showing asset processing status..." -ForegroundColor Yellow
+        Invoke-Query "SELECT original_name, is_ingested, is_geocoded, is_thumbnailed, is_curated, is_backed_up, has_errors FROM media_assets ORDER BY ingested_at DESC LIMIT 20;"
+    }
+    "assets-pending" {
+        Write-Host "Showing assets pending processing..." -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "Pending Geocoding:" -ForegroundColor Cyan
+        Invoke-Query "SELECT COUNT(*) as count FROM media_assets WHERE is_ingested = TRUE AND is_geocoded = FALSE AND location IS NOT NULL;"
+        Write-Host ""
+        Write-Host "Pending Backup:" -ForegroundColor Cyan
+        Invoke-Query "SELECT COUNT(*) as count FROM media_assets WHERE is_ingested = TRUE AND is_backed_up = FALSE;"
+        Write-Host ""
+        Write-Host "Assets with Errors:" -ForegroundColor Cyan
+        Invoke-Query "SELECT COUNT(*) as count FROM media_assets WHERE has_errors = TRUE;"
     }
     "status" {
         Write-Host "Showing system status (current)..." -ForegroundColor Yellow

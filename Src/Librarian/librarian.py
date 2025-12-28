@@ -227,6 +227,11 @@ class LibrarianService:
         """
         Write media asset to database.
         
+        Sets is_ingested = True since Librarian has successfully processed the file.
+        """
+        """
+        Write media asset to database.
+        
         Args:
             file_hash: SHA256 hash of file
             original_name: Original filename

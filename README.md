@@ -103,6 +103,18 @@ python -m Src.Librarian.librarian \
 - **True Duplicates** (same content hash): Automatically deleted from inbox
 - **Name Collisions** (same name, different content): Renamed with `_1`, `_2`, etc. suffix
 
+#### Status Tracking
+
+Each processed file has status flags tracking which services have processed it:
+- `is_ingested` - Librarian completed (always True if record exists)
+- `is_geocoded` - Reverse geocoding completed
+- `is_thumbnailed` - Thumbnails generated
+- `is_curated` - Manual curation done
+- `is_backed_up` - Backup completed
+- `has_errors` - Any errors occurred
+
+See `docs/MEDIA_ASSET_STATUS_DESIGN.md` for design details.
+
 ## Database Cleanup
 
 The `system_status_history` table stores historical heartbeat data. To prevent unbounded growth, run periodic cleanup:

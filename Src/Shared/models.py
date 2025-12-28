@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import JSON, BigInteger, Column, Integer, String, Text, TIMESTAMP, Index
+from sqlalchemy import Boolean, JSON, BigInteger, Column, Integer, String, Text, TIMESTAMP, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql import func
@@ -38,6 +38,21 @@ class MediaAsset(Base):
     # Location (GPS coordinates only - immutable source of truth)
     location = Column(JSON, nullable=True)  # {"lat": float, "lon": float}
     
+    # Processing status flags (track which services have processed this asset)
+    is_ingested = Column(Boolean, nullable=False, default=True)  # Librarian completed (always True if record exists)
+    is_geocoded = Column(Boolean, nullable=False, default=False)  # Reverse geocoding completed
+    is_thumbnailed = Column(Boolean, nullable=False, default=False)  # Thumbnails generated
+    is_curated = Column(Boolean, nullable=False, default=False)  # Manual curation done
+    is_backed_up = Column(Boolean, nullable=False, default=False)  # Backup completed
+    has_errors = Column(Boolean, nullable=False, default=False)  # Any errors occurred
+    error_message = Column(Text, nullable=True)  # Error details if has_errors = True
+    
+    # Status timestamps (when each processing step was completed)
+    geocoded_at = Column(TIMESTAMP, nullable=True)
+    thumbnailed_at = Column(TIMESTAMP, nullable=True)
+    curated_at = Column(TIMESTAMP, nullable=True)
+    backed_up_at = Column(TIMESTAMP, nullable=True)
+    
     # Timestamps
     created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
     
@@ -45,6 +60,9 @@ class MediaAsset(Base):
     __table_args__ = (
         Index("idx_media_assets_captured_at", "captured_at"),
         Index("idx_media_assets_ingested_at", "ingested_at"),
+        Index("idx_media_assets_is_geocoded", "is_geocoded"),
+        Index("idx_media_assets_is_backed_up", "is_backed_up"),
+        Index("idx_media_assets_has_errors", "has_errors"),
     )
     
     def __repr__(self):
