@@ -24,11 +24,25 @@ Verify that all services start correctly from a cold state, ensuring:
 **Option A: Full Cleanup (Recommended for true cold start test)**
 
 1. **Clean up existing containers and images:**
+   
+   **Option A: Run the cleanup script (bypass execution policy):**
    ```powershell
    cd D:\Photo_Factory\Stack\App_Data
-   .\cleanup_for_cold_start.ps1
+   powershell -ExecutionPolicy Bypass -File .\cleanup_for_cold_start.ps1
    ```
-   - This script safely removes containers and images
+   
+   **Option B: Manual cleanup (if script doesn't work):**
+   ```powershell
+   cd D:\Photo_Factory\Stack\App_Data
+   docker-compose down        # Stop and remove containers
+   docker-compose rm -f       # Force remove containers
+   
+   # Optional: Remove images for full rebuild test
+   docker images | findstr "photo-factory"
+   # Then remove specific images: docker rmi <image-name> -f
+   ```
+   
+   - This safely removes containers and images
    - **Data volumes are preserved** (database, Syncthing config, etc.)
    - You can choose to remove images for a full rebuild test
 

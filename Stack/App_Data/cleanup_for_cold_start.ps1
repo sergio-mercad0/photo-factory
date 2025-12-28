@@ -1,5 +1,10 @@
 # Photo Factory - Cold Start Cleanup Script
 # This script safely removes containers and images while preserving data volumes
+#
+# To run this script, use one of these methods:
+#   1. powershell -ExecutionPolicy Bypass -File .\cleanup_for_cold_start.ps1
+#   2. Right-click -> Run with PowerShell
+#   3. Or run the commands manually (see README)
 
 Write-Host "=== Photo Factory Cold Start Cleanup ===" -ForegroundColor Cyan
 Write-Host ""
