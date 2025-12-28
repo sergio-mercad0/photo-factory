@@ -241,8 +241,10 @@ def get_available_services() -> list:
         ]
         
         # Also check image names for photo-factory prefix
+        all_container_names = []
         for container in containers:
             name = container.name
+            all_container_names.append(name)
             try:
                 image_name = container.image.tags[0] if container.image.tags else ""
             except:
@@ -250,14 +252,21 @@ def get_available_services() -> list:
             
             # Check if it's a known service (exact match first, then substring) OR has photo-factory in image name OR container name
             is_known_service = name in known_services or any(known in name for known in known_services)
-            has_photo_factory = ("photo-factory" in image_name.lower() if image_name else False) or "photo-factory" in name.lower()
+            has_photo_factory = (image_name and "photo-factory" in image_name.lower()) or "photo-factory" in name.lower()
             
             # Debug logging for service_monitor
             if "service" in name.lower() and "monitor" in name.lower():
-                logger.info(f"Service discovery: name='{name}', image='{image_name}', is_known={is_known_service}, has_photo_factory={has_photo_factory}")
+                logger.info(f"Service discovery: name='{name}', image='{image_name}', is_known={is_known_service}, has_photo_factory={has_photo_factory}, will_add={is_known_service or has_photo_factory}")
             
             if is_known_service or has_photo_factory:
                 service_names.append(name)
+        
+        # Explicitly add service_monitor if it exists in container list but wasn't added
+        if "service_monitor" in all_container_names and "service_monitor" not in service_names:
+            logger.warning(f"service_monitor found in containers but not added. Adding explicitly.")
+            service_names.append("service_monitor")
+        elif "service_monitor" not in service_names and "service_monitor" not in all_container_names:
+            logger.warning(f"service_monitor not found in container list. All containers: {all_container_names[:10]}... (showing first 10)")
         
         # Remove duplicates and sort
         return sorted(list(set(service_names)))
