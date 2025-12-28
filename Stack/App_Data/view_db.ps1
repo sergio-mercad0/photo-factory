@@ -42,7 +42,49 @@ switch ($Command.ToLower()) {
         Show-Help
     }
     "databases" {
-        Write-Host "Listing all databases..." -ForegroundColor Yellow
+        Write-Host "=== Photo Factory Databases ===" -ForegroundColor Cyan
+        Write-Host ""
+        
+        # Database descriptions mapping
+        $dbDescriptions = @{
+            "photo_factory" = "[MAIN] Photo Factory Database - Media assets, system status, service heartbeats"
+            "postgres" = "[SYSTEM] Default PostgreSQL Database - System/admin operations"
+            "template0" = "[SYSTEM] PostgreSQL Template Database - Read-only template"
+            "template1" = "[SYSTEM] PostgreSQL Template Database - Default template"
+        }
+        
+        Write-Host "Databases with sizes and descriptions:" -ForegroundColor Yellow
+        Write-Host ""
+        
+        # Query databases with sizes
+        $dbQuery = "SELECT datname, pg_size_pretty(pg_database_size(datname)) as size FROM pg_database WHERE datistemplate = false ORDER BY pg_database_size(datname) DESC;"
+        $dbOutput = docker exec $container psql -U $user -d postgres -t -A -F "|" -c $dbQuery
+        
+        if ($dbOutput) {
+            $dbOutput -split "`n" | ForEach-Object {
+                $line = $_.Trim()
+                if ($line -and $line -notmatch "^\s*$") {
+                    $parts = $line -split "\|"
+                    if ($parts.Length -ge 2) {
+                        $dbName = $parts[0].Trim()
+                        $dbSize = $parts[1].Trim()
+                        
+                        $description = if ($dbDescriptions.ContainsKey($dbName)) {
+                            $dbDescriptions[$dbName]
+                        } else {
+                            "[UNKNOWN] Unknown Database"
+                        }
+                        
+                        Write-Host "  $dbName" -ForegroundColor Green -NoNewline
+                        Write-Host " ($dbSize)" -ForegroundColor Gray -NoNewline
+                        Write-Host " - $description" -ForegroundColor White
+                    }
+                }
+            }
+        }
+        
+        Write-Host ""
+        Write-Host "Full database details (PostgreSQL format):" -ForegroundColor Yellow
         docker exec $container psql -U $user -d postgres -c "\l"
     }
     "tables" {
