@@ -226,16 +226,48 @@ Files synced to `Photos_Inbox/` are automatically detected and processed by the 
 All services include health checks to verify they are functioning correctly:
 
 **Librarian Service:**
-- Runs pytest tests to verify service functionality
-- Health check: `pytest Src/Librarian/tests/ --tb=short -q`
-- Interval: 30s, Timeout: 10s, Retries: 3, Start Period: 40s
+- Lightweight process check
+- Health check: `python -c "import sys; sys.exit(0)"`
+- Interval: 2m, Timeout: 5s, Retries: 2, Start Period: 60s
 
 **Syncthing Service:**
 - Verifies web UI is responding on port 8384
 - Health check: `wget --spider http://localhost:8384/`
-- Interval: 30s, Timeout: 10s, Retries: 3, Start Period: 40s
+- Interval: 2m, Timeout: 5s, Retries: 2, Start Period: 60s
+
+**Dashboard Service:**
+- Lightweight process check
+- Health check: `python -c "import sys; sys.exit(0)"`
+- Interval: 2m, Timeout: 5s, Retries: 2, Start Period: 60s
 
 If a health check fails, Docker marks the container as unhealthy and can trigger restart policies.
+
+### Service Heartbeat Tracking
+
+All services implement heartbeat tracking for observability:
+
+**Application Services (Built-in Heartbeat):**
+- **librarian**: Updates heartbeat every 60 seconds
+- **dashboard**: Updates heartbeat every 5 minutes
+
+**Infrastructure Services (Monitored):**
+- **factory-db**: Monitored by `service-monitor` container (checks every 5 minutes)
+- **syncthing**: Monitored by `service-monitor` container (checks every 5 minutes)
+
+**Heartbeat Data:**
+- All heartbeats write to both `system_status` (current state) and `system_status_history` (historical record)
+- View heartbeats in the Dashboard or query the database directly
+- Heartbeat status: "OK", "ERROR", or "WARNING"
+- Includes optional `current_task` field for service activity
+
+**Viewing Heartbeats:**
+```bash
+# Via Dashboard
+http://localhost:8501
+
+# Via Database
+docker exec factory_postgres psql -U photo_factory -d photo_factory -c "SELECT * FROM system_status;"
+```
 
 ## Cold Start Validation
 
