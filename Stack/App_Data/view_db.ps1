@@ -19,7 +19,9 @@ function Show-Help {
     Write-Host "  tables        - List all tables"
     Write-Host "  assets        - Show all media assets"
     Write-Host "  assets-recent - Show 10 most recent assets"
-    Write-Host "  status        - Show system status (heartbeats)"
+    Write-Host "  status        - Show system status (current heartbeats)"
+    Write-Host "  history       - Show system status history (last 20 records)"
+    Write-Host "  history-count - Show history record counts per service"
     Write-Host "  stats         - Show database statistics"
     Write-Host "  interactive   - Open interactive psql session"
     Write-Host ""
@@ -51,8 +53,16 @@ switch ($Command.ToLower()) {
         Invoke-Query "SELECT original_name, file_hash, size_bytes, captured_at, ingested_at FROM media_assets ORDER BY ingested_at DESC LIMIT 10;"
     }
     "status" {
-        Write-Host "Showing system status..." -ForegroundColor Yellow
+        Write-Host "Showing system status (current)..." -ForegroundColor Yellow
         Invoke-Query "SELECT service_name, status, last_heartbeat, current_task, updated_at FROM system_status ORDER BY service_name;"
+    }
+    "history" {
+        Write-Host "Showing system status history (last 20 records)..." -ForegroundColor Yellow
+        Invoke-Query "SELECT service_name, status, current_task, heartbeat_timestamp FROM system_status_history ORDER BY heartbeat_timestamp DESC LIMIT 20;"
+    }
+    "history-count" {
+        Write-Host "Showing history record counts..." -ForegroundColor Yellow
+        Invoke-Query "SELECT service_name, COUNT(*) as record_count, MIN(heartbeat_timestamp) as oldest, MAX(heartbeat_timestamp) as newest FROM system_status_history GROUP BY service_name ORDER BY service_name;"
     }
     "stats" {
         Write-Host "Database Statistics:" -ForegroundColor Yellow
