@@ -206,6 +206,19 @@ All services include health checks to verify they are functioning correctly:
 
 If a health check fails, Docker marks the container as unhealthy and can trigger restart policies.
 
+## Cold Start Validation
+
+After a fresh Windows boot or Docker restart, validate the system starts correctly:
+
+1. Start Docker Desktop
+2. Navigate to `Stack/App_Data`
+3. Run: `docker-compose build` (runs tests automatically)
+4. Run: `docker-compose up -d`
+5. Wait for health checks: `docker-compose ps`
+6. Verify dashboard at `http://localhost:8501`
+
+See `docs/COLD_START_VALIDATION.md` for detailed procedure and checklist.
+
 ## Testing
 
 ### Running Tests
