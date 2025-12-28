@@ -18,3 +18,13 @@
 =============== Dec 28, 2025 (UTC) ===============
 00:04:44.111083 db@close closing
 00:04:44.113141 db@close done T·2.099245ms
+=============== Dec 28, 2025 (UTC) ===============
+00:23:41.184136 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+00:23:41.188142 version@stat F·[0 1] S·207B[0B 207B] Sc·[0.00 0.00]
+00:23:41.188443 db@open opening
+00:23:41.189257 journal@recovery F·1
+00:23:41.189831 journal@recovery recovering @2
+00:23:41.695329 memdb@flush created L0@5 N·8728 S·3MiB "\x00\x00\x00..png,v4831":"\x10\x00\x00..9d7,v4719"
+00:23:41.696478 version@stat F·[1 1] S·3MiB[3MiB 207B] Sc·[0.25 0.00]
+00:23:41.754241 db@janitor F·4 G·0
+00:23:41.754413 db@open done T·565.842293ms
