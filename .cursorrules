@@ -153,7 +153,7 @@ Do you approve?"
         * `factory-db` - Photo Factory database
         * `syncthing` - File synchronization service
     * **Monitoring Services** (visible in dashboard, but may not have own heartbeat):
-        * `service-monitor` - Infrastructure monitoring service (monitors other services, doesn't need its own heartbeat)
+        * `service-monitor` (service name) / `service_monitor` (container name) - Infrastructure monitoring service (monitors other services, doesn't need its own heartbeat)
     * **Optional Services** (heartbeats recommended):
         * Immich services, Homepage, etc.
     * **Implementation:**

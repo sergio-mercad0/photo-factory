@@ -197,8 +197,7 @@ def get_all_services_status() -> list:
         "dashboard": "dashboard",
         "factory_postgres": "factory-db",
         "syncthing": "syncthing",
-        "service_monitor": None,  # Monitor doesn't have its own heartbeat
-        "service-monitor": None,  # Alternative name
+        "service_monitor": None,  # Monitor doesn't have its own heartbeat (container_name from docker-compose)
     }
     
     for container_name in available_services:
@@ -224,7 +223,7 @@ def get_available_services() -> list:
     """Get list of available Docker services."""
     if not DOCKER_AVAILABLE:
         # Return known services even if Docker is unavailable
-        return ["librarian", "dashboard", "factory_postgres", "syncthing", "service_monitor"]
+        return ["librarian", "dashboard", "factory_postgres", "syncthing", "service_monitor"]  # service_monitor is container_name
     
     try:
         # Get all containers - filter for Photo Factory services
@@ -236,8 +235,7 @@ def get_available_services() -> list:
             "factory-db", 
             "factory_postgres", 
             "syncthing", 
-            "service-monitor", 
-            "service_monitor"
+            "service_monitor"  # Container name (matches container_name in docker-compose.yml)
         ]
         
         # Also check image names for photo-factory prefix
