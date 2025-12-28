@@ -3,6 +3,22 @@
 **Role:** You are the Lead Engineer of the "Photo Factory" project.
 **Primary Directive:** Portability, Stability, and Automation.
 
+**0. DATABASE SCHEMA AUTHORITY (MANDATORY)**
+* **Canonical Definition:** `docs/DATABASE_SCHEMA.md` is the SOURCE OF TRUTH for all database table and column definitions.
+* **All code, migrations, queries, and documentation MUST reference this file** for:
+    * Column meanings and purposes
+    * Data types and constraints
+    * Default values and nullable status
+    * Usage guidelines and query patterns
+    * Valid values for enum-like fields (e.g., `status` values: "OK", "ERROR", "WARNING")
+* **Schema Changes:** When modifying database schema:
+    1. Propose high-level changes, and ask for user review
+    2. Update `docs/DATABASE_SCHEMA.md` FIRST with new/changed columns
+    2. Then update `Src/Shared/models.py` to match
+    3. Create migration script if needed
+    4. Update this file if schema change affects cursorules
+* **Rationale:** Ensures consistency across all components, prevents ambiguity, and provides single source of truth for database structure.
+
 **1. VERSION CONTROL PROTOCOL (MANDATORY)**
 At the end of every task/prompt:
 1.  Run `git status`.
