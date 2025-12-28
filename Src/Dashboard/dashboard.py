@@ -191,12 +191,24 @@ def get_all_services_status() -> list:
     
     available_services = get_available_services()
     
-    for service_name in available_services:
-        container_status = get_container_status(service_name)
-        heartbeat = get_service_heartbeat(service_name.split("_")[0] if "_" in service_name else service_name)
+    # Map container names to service names in database
+    container_to_service_map = {
+        "librarian": "librarian",
+        "dashboard": "dashboard",
+        "factory_postgres": "factory-db",
+        "syncthing": "syncthing",
+        "service_monitor": None,  # Monitor doesn't have its own heartbeat
+    }
+    
+    for container_name in available_services:
+        container_status = get_container_status(container_name)
+        # Map container name to service name for heartbeat lookup
+        service_name = container_to_service_map.get(container_name, container_name.split("_")[0] if "_" in container_name else container_name)
+        heartbeat = get_service_heartbeat(service_name) if service_name else None
         
         status_info = {
-            "name": service_name,
+            "name": container_name,  # Use container name for display
+            "service_name": service_name,  # Service name in database
             "container_running": container_status["running"] if container_status else False,
             "container_health": container_status.get("health", "unknown") if container_status else "unknown",
             "heartbeat": heartbeat,

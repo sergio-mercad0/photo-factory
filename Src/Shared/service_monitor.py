@@ -16,10 +16,13 @@ sys.path.insert(0, str(project_root))
 
 from Src.Shared.database import get_db_session, init_database
 from Src.Shared.models import SystemStatus, SystemStatusHistory
-from Src.Librarian.utils import setup_logging
 from datetime import datetime
 
-setup_logging()
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger("service_monitor")
 
 
