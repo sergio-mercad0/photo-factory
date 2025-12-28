@@ -223,13 +223,13 @@ def get_available_services() -> list:
     """Get list of available Docker services."""
     if not DOCKER_AVAILABLE:
         # Return known services even if Docker is unavailable
-        return ["librarian", "dashboard", "factory_postgres", "syncthing"]
+        return ["librarian", "dashboard", "factory_postgres", "syncthing", "service_monitor"]
     
     try:
         # Get all containers with the photo-factory prefix or known service names
         containers = docker_client.containers.list(all=True)
         service_names = []
-        known_services = ["librarian", "dashboard", "factory-db", "factory_postgres", "syncthing"]
+        known_services = ["librarian", "dashboard", "factory-db", "factory_postgres", "syncthing", "service-monitor", "service_monitor"]
         
         for container in containers:
             name = container.name

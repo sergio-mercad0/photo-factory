@@ -206,10 +206,41 @@ class TestDashboardServiceMonitoring:
                 
                 result = get_available_services()
                 
-                # service_monitor should be included if it matches known services or photo-factory pattern
-                # The actual implementation filters by known_services list, so we verify the logic works
-                # service_monitor might not be in known_services, but should be discoverable
+                # service_monitor should be included (it's in known_services list)
                 assert "librarian" in result
                 assert "factory_postgres" in result
-                # Note: service_monitor inclusion depends on known_services list in actual implementation
+                assert "service_monitor" in result, "service_monitor should be included in available services"
+    
+    def test_service_monitor_appears_in_all_services_status(self):
+        """Test that service_monitor appears in all services status even without heartbeat."""
+        get_all_services_status.clear()
+        
+        with patch('Src.Dashboard.dashboard.DOCKER_AVAILABLE', True):
+            with patch('Src.Dashboard.dashboard.get_available_services') as mock_services:
+                mock_services.return_value = ["librarian", "service_monitor"]
+                
+                with patch('Src.Dashboard.dashboard.get_container_status') as mock_container:
+                    mock_container.return_value = {"running": True, "health": "healthy"}
+                    
+                    with patch('Src.Dashboard.dashboard.get_service_heartbeat') as mock_heartbeat:
+                        # service_monitor doesn't have a heartbeat (returns None)
+                        def side_effect(service_name):
+                            if service_name == "librarian":
+                                return {"last_heartbeat": datetime.now(), "status": "OK"}
+                            return None  # service_monitor has no heartbeat
+                        
+                        mock_heartbeat.side_effect = side_effect
+                        
+                        result = get_all_services_status()
+                        
+                        # Should include both services
+                        assert len(result) == 2
+                        service_names = [svc["name"] for svc in result]
+                        assert "librarian" in service_names
+                        assert "service_monitor" in service_names
+                        
+                        # service_monitor should have None heartbeat but still appear
+                        service_monitor = [svc for svc in result if svc["name"] == "service_monitor"][0]
+                        assert service_monitor["heartbeat"] is None
+                        assert service_monitor["container_running"] is True
 

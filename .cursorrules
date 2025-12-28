@@ -116,6 +116,7 @@ Do you approve?"
         3. **Health Check:** Wait for health checks to pass (if configured) or verify the service is running (`docker-compose ps`).
         4. **Functionality:** Verify the service performs its intended function (e.g., process files, respond to requests, connect to database).
         5. **Dashboard Impact:** If modifying a service that the Dashboard monitors (Librarian, Database, etc.), verify the Dashboard still displays correct data (heartbeats, metrics, status). Check that data freshness is maintained and no stale values appear. If building a brand new Service, make sure it's accounted for in the Dashboard, otherwise propose new sections and metrics for the new service.
+        6. **Service Visibility:** ALL services defined in `docker-compose.yml` MUST be visible in the Dashboard's service list, even if they don't have heartbeats (e.g., monitoring services like `service-monitor`). The Dashboard should show container status for all Photo Factory services.
         6. **Cleanup:** Remove any test files, mock data, or temporary artifacts created during validation. This includes:
             * Test files in `Photos_Inbox/` or `Storage/` or ``Storage`/` created for testing
             * Temporary Docker volumes or containers created for validation
@@ -151,12 +152,18 @@ Do you approve?"
         * `dashboard` - Monitoring dashboard
         * `factory-db` - Photo Factory database
         * `syncthing` - File synchronization service
+    * **Monitoring Services** (visible in dashboard, but may not have own heartbeat):
+        * `service-monitor` - Infrastructure monitoring service (monitors other services, doesn't need its own heartbeat)
     * **Optional Services** (heartbeats recommended):
         * Immich services, Homepage, etc.
     * **Implementation:**
         * Application services: Integrate `HeartbeatService` in service startup.
         * Infrastructure services: Use `Src.Shared.infrastructure_monitor` or create custom monitor script.
         * All monitors must run as separate processes/threads and handle database errors gracefully.
+    * **Dashboard Visibility Requirement:**
+        * ALL services defined in `docker-compose.yml` MUST be visible in the Dashboard's service list.
+        * Services without heartbeats (like `service-monitor`) should still appear with container status.
+        * The Dashboard must discover and display all Photo Factory services automatically.
     * *Rationale:* Complete observability across all services, historical data for troubleshooting, early failure detection, consistent monitoring approach.
 * **Layer Efficiency:** specific order is MANDATORY to use Docker caching:
     1.  Copy `requirements.txt`.
