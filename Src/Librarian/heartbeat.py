@@ -9,7 +9,7 @@ import time
 from typing import Optional
 
 from Src.Shared.database import get_db_session
-from Src.Shared.models import SystemStatus
+from Src.Shared.models import SystemStatus, SystemStatusHistory
 
 logger = logging.getLogger("librarian.heartbeat")
 
@@ -47,10 +47,19 @@ class HeartbeatService:
         self.status = status
     
     def _update_heartbeat(self):
-        """Update heartbeat in database."""
+        """
+        Update heartbeat in database.
+        
+        Writes to both:
+        - system_status: Fast lookup table (updated in place)
+        - system_status_history: Historical time-series (new row per heartbeat)
+        """
         try:
+            from datetime import datetime
+            heartbeat_time = datetime.now()
+            
             with get_db_session() as session:
-                # Get or create system_status record
+                # 1. Update current status table (fast lookup for dashboard)
                 status_record = session.query(SystemStatus).filter(
                     SystemStatus.service_name == self.service_name
                 ).first()
@@ -59,11 +68,18 @@ class HeartbeatService:
                     status_record = SystemStatus(service_name=self.service_name)
                     session.add(status_record)
                 
-                # Update fields
-                from datetime import datetime
                 status_record.status = self.status
                 status_record.current_task = self.current_task
-                status_record.last_heartbeat = datetime.now()  # Explicitly update heartbeat timestamp
+                status_record.last_heartbeat = heartbeat_time
+                
+                # 2. Insert historical record (time-series for analysis)
+                history_record = SystemStatusHistory(
+                    service_name=self.service_name,
+                    status=self.status,
+                    current_task=self.current_task,
+                    heartbeat_timestamp=heartbeat_time
+                )
+                session.add(history_record)
                 
                 session.commit()
                 logger.debug(f"Heartbeat updated: {self.service_name} - {self.status}")

@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import JSON, BigInteger, Column, String, Text, TIMESTAMP, Index
+from sqlalchemy import JSON, BigInteger, Column, Integer, String, Text, TIMESTAMP, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql import func
@@ -73,4 +73,40 @@ class SystemStatus(Base):
     
     def __repr__(self):
         return f"<SystemStatus(service={self.service_name}, status={self.status}, heartbeat={self.last_heartbeat})>"
+
+
+class SystemStatusHistory(Base):
+    """
+    Historical time-series record of service heartbeats.
+    
+    Each heartbeat creates a new row, providing complete historical data
+    for troubleshooting, uptime analysis, and trend detection.
+    
+    Records are automatically cleaned up after 60 days.
+    """
+    __tablename__ = "system_status_history"
+    
+    # Primary key
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    # Service identification
+    service_name = Column(String(64), nullable=False, index=True)
+    
+    # Status information (snapshot at heartbeat time)
+    status = Column(String(16), nullable=False)  # "OK", "ERROR", "WARNING"
+    current_task = Column(Text, nullable=True)  # What the service was doing
+    
+    # Timestamp of this heartbeat
+    heartbeat_timestamp = Column(TIMESTAMP, nullable=False, index=True)
+    
+    # Record creation timestamp
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+    
+    # Indexes for efficient queries
+    __table_args__ = (
+        Index("idx_system_status_history_service_timestamp", "service_name", "heartbeat_timestamp"),
+    )
+    
+    def __repr__(self):
+        return f"<SystemStatusHistory(service={self.service_name}, status={self.status}, timestamp={self.heartbeat_timestamp})>"
 

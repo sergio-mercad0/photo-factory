@@ -103,6 +103,25 @@ python -m Src.Librarian.librarian \
 - **True Duplicates** (same content hash): Automatically deleted from inbox
 - **Name Collisions** (same name, different content): Renamed with `_1`, `_2`, etc. suffix
 
+## Database Cleanup
+
+The `system_status_history` table stores historical heartbeat data. To prevent unbounded growth, run periodic cleanup:
+
+**Manual cleanup:**
+```bash
+python -m Src.Shared.cleanup_script
+```
+
+**Scheduled cleanup (recommended):**
+- Add to cron/systemd timer
+- Run daily: `0 2 * * * cd /path/to/Photo_Factory && python -m Src.Shared.cleanup_script`
+- Retention: 60 days (configurable in script)
+
+**Docker cleanup:**
+```bash
+docker exec librarian python -m Src.Shared.cleanup_script
+```
+
 ## Environment Variables
 
 No environment variables are required for the Librarian service. All paths are resolved relative to the project root.
