@@ -198,6 +198,7 @@ def get_all_services_status() -> list:
         "factory_postgres": "factory-db",
         "syncthing": "syncthing",
         "service_monitor": None,  # Monitor doesn't have its own heartbeat
+        "service-monitor": None,  # Alternative name
     }
     
     for container_name in available_services:
@@ -226,15 +227,32 @@ def get_available_services() -> list:
         return ["librarian", "dashboard", "factory_postgres", "syncthing", "service_monitor"]
     
     try:
-        # Get all containers with the photo-factory prefix or known service names
+        # Get all containers - filter for Photo Factory services
         containers = docker_client.containers.list(all=True)
         service_names = []
-        known_services = ["librarian", "dashboard", "factory-db", "factory_postgres", "syncthing", "service-monitor", "service_monitor"]
+        known_services = [
+            "librarian", 
+            "dashboard", 
+            "factory-db", 
+            "factory_postgres", 
+            "syncthing", 
+            "service-monitor", 
+            "service_monitor"
+        ]
         
+        # Also check image names for photo-factory prefix
         for container in containers:
             name = container.name
-            # Check if it's a known service or has photo-factory in the name
-            if any(known in name for known in known_services) or "photo-factory" in name.lower():
+            try:
+                image_name = container.image.tags[0] if container.image.tags else ""
+            except:
+                image_name = ""
+            
+            # Check if it's a known service (exact match first, then substring) OR has photo-factory in image name OR container name
+            is_known_service = name in known_services or any(known in name for known in known_services)
+            has_photo_factory = "photo-factory" in image_name.lower() or "photo-factory" in name.lower()
+            
+            if is_known_service or has_photo_factory:
                 service_names.append(name)
         
         # Remove duplicates and sort
