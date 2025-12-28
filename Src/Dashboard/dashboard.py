@@ -11,8 +11,9 @@ import streamlit as st
 from sqlalchemy import func
 from streamlit_autorefresh import st_autorefresh
 
-from Src.Shared.database import get_db_session, check_database_connection
+from Src.Shared.database import get_db_session, check_database_connection, init_database
 from Src.Shared.models import MediaAsset, SystemStatus
+from Src.Shared.heartbeat_service import HeartbeatService
 
 logger = logging.getLogger("dashboard")
 
@@ -284,8 +285,29 @@ def get_all_logs(services: list, tail: int = 100) -> str:
     return "\n".join(all_logs)
 
 
+# Initialize heartbeat service (runs in background thread)
+_heartbeat_service: Optional[HeartbeatService] = None
+
+def _init_heartbeat():
+    """Initialize heartbeat service for dashboard."""
+    global _heartbeat_service
+    if _heartbeat_service is None:
+        try:
+            # Initialize database (ensures tables exist)
+            init_database()
+            
+            # Start heartbeat service (5 minute interval)
+            _heartbeat_service = HeartbeatService(service_name="dashboard", interval=300.0)
+            _heartbeat_service.set_current_task("Dashboard running")
+            _heartbeat_service.start()
+            logger.info("Dashboard heartbeat service started")
+        except Exception as e:
+            logger.error(f"Failed to initialize heartbeat: {e}", exc_info=True)
+
 def main():
     """Main dashboard function."""
+    # Initialize heartbeat on first run
+    _init_heartbeat()
     # Set page title and add CSS to reduce visual flash
     st.markdown(
         """

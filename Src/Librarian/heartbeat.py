@@ -1,20 +1,18 @@
 """
 Heartbeat service for Librarian.
 
-Updates system_status table periodically to report service health.
+Uses shared HeartbeatService from Src.Shared.heartbeat_service.
 """
 import logging
-import threading
-import time
 from typing import Optional
 
-from Src.Shared.database import get_db_session
-from Src.Shared.models import SystemStatus, SystemStatusHistory
+# Import from shared module
+from Src.Shared.heartbeat_service import HeartbeatService as SharedHeartbeatService
 
 logger = logging.getLogger("librarian.heartbeat")
 
-
-class HeartbeatService:
+# Re-export for backward compatibility
+HeartbeatService = SharedHeartbeatService
     """
     Service that periodically updates system_status table with heartbeat.
     

@@ -122,6 +122,26 @@ Do you approve?"
         * **Real-time Status:** Dashboard polls Docker directly (via Docker API or `docker ps`) for current container status. Docker is the source of truth for "is service running now".
         * **Historical Status:** Services update `system_status` table periodically (5-10 minutes) for historical trends, metrics, and offline analysis. Database stores past heartbeats and operational data.
         * *Separation:* Real-time = Docker, Historical = Database.
+* **Service Heartbeat Requirement (MANDATORY):**
+    * **ALL services** (application and infrastructure) MUST implement heartbeat tracking.
+    * **Application Services** (Python-based): Must use `Src.Shared.heartbeat_service.HeartbeatService` to write heartbeats.
+    * **Infrastructure Services** (external): Must have a lightweight monitor script that checks service health and updates heartbeats.
+    * **Heartbeat Updates:**
+        * Must write to BOTH `system_status` (current state) AND `system_status_history` (historical record).
+        * Update interval: 5-10 minutes (configurable per service).
+        * Include service name, status ("OK", "ERROR", "WARNING"), and optional current_task.
+    * **Critical Services** (must have heartbeats):
+        * `librarian` - Photo ingestion service
+        * `dashboard` - Monitoring dashboard
+        * `factory-db` - Photo Factory database
+        * `syncthing` - File synchronization service
+    * **Optional Services** (heartbeats recommended):
+        * Immich services, Homepage, etc.
+    * **Implementation:**
+        * Application services: Integrate `HeartbeatService` in service startup.
+        * Infrastructure services: Use `Src.Shared.infrastructure_monitor` or create custom monitor script.
+        * All monitors must run as separate processes/threads and handle database errors gracefully.
+    * *Rationale:* Complete observability across all services, historical data for troubleshooting, early failure detection, consistent monitoring approach.
 * **Layer Efficiency:** specific order is MANDATORY to use Docker caching:
     1.  Copy `requirements.txt`.
     2.  RUN pip install.

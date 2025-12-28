@@ -158,5 +158,28 @@ services:
       retries: 2
       start_period: 60s
 
+  # Infrastructure service monitor (heartbeat tracking for external services)
+  service-monitor:
+    build:
+      context: ../../
+      dockerfile: Src/Shared/Dockerfile.monitor
+    container_name: service_monitor
+    environment:
+      DATABASE_URL: postgresql://${FACTORY_DB_USER:-photo_factory}:${FACTORY_DB_PASSWORD:-photo_factory}@factory-db:5432/${FACTORY_DB_NAME:-photo_factory}
+      DB_HOST: factory-db
+      DB_PORT: 5432
+      DB_USERNAME: ${FACTORY_DB_USER:-photo_factory}
+      DB_PASSWORD: ${FACTORY_DB_PASSWORD:-photo_factory}
+      DB_DATABASE_NAME: ${FACTORY_DB_NAME:-photo_factory}
+      FACTORY_DB_USER: ${FACTORY_DB_USER:-photo_factory}
+      MONITOR_INTERVAL: 300
+    depends_on:
+      factory-db:
+        condition: service_healthy
+      syncthing:
+        condition: service_started
+    restart: always
+    command: ["python", "-m", "Src.Shared.service_monitor"]
+
 volumes:
   model-cache:

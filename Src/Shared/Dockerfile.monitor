@@ -1,0 +1,28 @@
+# Dockerfile for infrastructure monitor services
+# Lightweight container for monitoring external services
+
+FROM python:3.11-slim-bookworm
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy shared library
+COPY Src/Shared/ ./Src/Shared/
+
+# Copy requirements
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Set PYTHONPATH
+ENV PYTHONPATH=/app
+
+# Run monitor (command specified in docker-compose)
+CMD ["python", "-m", "Src.Shared.service_monitor"]
+
