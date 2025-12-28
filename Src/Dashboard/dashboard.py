@@ -456,17 +456,42 @@ def main():
                 else:
                     status_indicator = "🔴 Not Running"
                 
-                # Heartbeat info - always calculate fresh from current time
+                # Heartbeat info - show elapsed/expected with ratio-based color coding
                 heartbeat_info = "N/A"
                 if svc["heartbeat"]:
+                    # Map service names to their expected heartbeat intervals (in seconds)
+                    service_intervals = {
+                        "librarian": 60,      # Updates every 60 seconds
+                        "dashboard": 300,     # Updates every 5 minutes
+                        "factory-db": 300,    # Monitored every 5 minutes
+                        "syncthing": 300,     # Monitored every 5 minutes
+                    }
+                    
+                    # Get service name from mapping (use service_name if available, otherwise derive from container name)
+                    service_name_for_interval = svc.get("service_name")
+                    if not service_name_for_interval:
+                        # Derive service name from container name
+                        container_name = svc["name"]
+                        if container_name == "factory_postgres":
+                            service_name_for_interval = "factory-db"
+                        else:
+                            service_name_for_interval = container_name.split("_")[0] if "_" in container_name else container_name
+                    
+                    expected_interval = service_intervals.get(service_name_for_interval, 300)  # Default to 5 minutes
+                    
                     time_since = datetime.now() - svc["heartbeat"]["last_heartbeat"]
                     seconds_ago = int(time_since.total_seconds())
-                    if seconds_ago <= 60:
-                        heartbeat_info = f"🟢 {seconds_ago}s ago"
-                    elif seconds_ago <= 180:
-                        heartbeat_info = f"🟡 {seconds_ago}s ago"
+                    ratio = seconds_ago / expected_interval
+                    
+                    # Color based on ratio: <1.0 = green, 1.0-2.0 = yellow, >=2.0 = red
+                    if ratio < 1.0:
+                        color = "🟢"
+                    elif ratio < 2.0:
+                        color = "🟡"
                     else:
-                        heartbeat_info = f"🔴 {seconds_ago}s ago"
+                        color = "🔴"
+                    
+                    heartbeat_info = f"{color} {seconds_ago}/{expected_interval}s ago"
                 
                 status_data.append({
                     "Service": svc["name"],
@@ -508,14 +533,20 @@ def main():
             
             with col4:
                 if heartbeat:
+                    expected_interval = 60  # Librarian updates every 60 seconds
                     time_since = datetime.now() - heartbeat["last_heartbeat"]
                     seconds_ago = int(time_since.total_seconds())
-                    if seconds_ago <= 60:
-                        st.metric("Librarian Heartbeat", f"🟢 {seconds_ago}s ago")
-                    elif seconds_ago <= 180:
-                        st.metric("Librarian Heartbeat", f"🟡 {seconds_ago}s ago")
+                    ratio = seconds_ago / expected_interval
+                    
+                    # Color based on ratio: <1.0 = green, 1.0-2.0 = yellow, >=2.0 = red
+                    if ratio < 1.0:
+                        color = "🟢"
+                    elif ratio < 2.0:
+                        color = "🟡"
                     else:
-                        st.metric("Librarian Heartbeat", f"🔴 {seconds_ago}s ago")
+                        color = "🔴"
+                    
+                    st.metric("Librarian Heartbeat", f"{color} {seconds_ago}/{expected_interval}s ago")
                 else:
                     st.metric("Librarian Heartbeat", "N/A")
         
@@ -589,16 +620,34 @@ def main():
         
         with status_col2:
             # Get heartbeat if available
-            heartbeat = get_service_heartbeat(selected_service.split("_")[0] if "_" in selected_service else selected_service)
+            service_name_for_heartbeat = selected_service.split("_")[0] if "_" in selected_service else selected_service
+            # Map container names to service names
+            if selected_service == "factory_postgres":
+                service_name_for_heartbeat = "factory-db"
+            
+            heartbeat = get_service_heartbeat(service_name_for_heartbeat)
+            
+            # Map service names to their expected heartbeat intervals (in seconds)
+            service_intervals = {
+                "librarian": 60,      # Updates every 60 seconds
+                "dashboard": 300,     # Updates every 5 minutes
+                "factory-db": 300,    # Monitored every 5 minutes
+                "syncthing": 300,     # Monitored every 5 minutes
+            }
+            
             if heartbeat:
+                expected_interval = service_intervals.get(service_name_for_heartbeat, 300)  # Default to 5 minutes
                 time_since = datetime.now() - heartbeat["last_heartbeat"]
                 seconds_ago = int(time_since.total_seconds())
-                if seconds_ago <= 60:
-                    st.success(f"💓 Heartbeat: {seconds_ago}s ago")
-                elif seconds_ago <= 180:
-                    st.warning(f"💓 Heartbeat: {seconds_ago}s ago")
+                ratio = seconds_ago / expected_interval
+                
+                # Color based on ratio: <1.0 = green, 1.0-2.0 = yellow, >=2.0 = red
+                if ratio < 1.0:
+                    st.success(f"💓 Heartbeat: {seconds_ago}/{expected_interval}s ago")
+                elif ratio < 2.0:
+                    st.warning(f"💓 Heartbeat: {seconds_ago}/{expected_interval}s ago")
                 else:
-                    st.error(f"💓 Heartbeat: {seconds_ago}s ago")
+                    st.error(f"💓 Heartbeat: {seconds_ago}/{expected_interval}s ago")
                 
                 if heartbeat.get("current_task"):
                     st.caption(f"Current Task: {heartbeat['current_task']}")
