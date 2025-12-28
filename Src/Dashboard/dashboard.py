@@ -261,15 +261,16 @@ def get_available_services() -> list:
             if is_known_service or has_photo_factory:
                 service_names.append(name)
         
-        # Explicitly add service_monitor if it exists in container list but wasn't added
-        if "service_monitor" in all_container_names and "service_monitor" not in service_names:
-            logger.warning(f"service_monitor found in containers but not added. Adding explicitly.")
-            service_names.append("service_monitor")
-        elif "service_monitor" not in service_names and "service_monitor" not in all_container_names:
-            logger.warning(f"service_monitor not found in container list. All containers: {all_container_names[:10]}... (showing first 10)")
+        # Explicitly add service_monitor if it exists in container list (regardless of other checks)
+        if "service_monitor" in all_container_names:
+            if "service_monitor" not in service_names:
+                logger.warning(f"service_monitor found in containers but not added by discovery logic. Adding explicitly.")
+                service_names.append("service_monitor")
         
         # Remove duplicates and sort
-        return sorted(list(set(service_names)))
+        result = sorted(list(set(service_names)))
+        logger.info(f"Final service list: {result}")
+        return result
     except Exception as e:
         logger.error(f"Error getting available services: {e}")
         # Return known services as fallback
