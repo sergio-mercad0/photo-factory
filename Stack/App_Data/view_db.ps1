@@ -46,19 +46,21 @@ switch ($Command.ToLower()) {
         Write-Host ""
         
         # Database descriptions mapping
+        # Note: template0 and template1 are PostgreSQL system databases used as templates
+        # They are NOT user databases and should not be used for application data
         $dbDescriptions = @{
-            "photo_factory" = "[MAIN] Photo Factory Database - Media assets, system status, service heartbeats"
-            "postgres" = "[SYSTEM] Default PostgreSQL Database - System/admin operations"
-            "template0" = "[SYSTEM] PostgreSQL Template Database - Read-only template"
-            "template1" = "[SYSTEM] PostgreSQL Template Database - Default template"
+            "photo_factory" = "[USER] Photo Factory Application Database - Contains: media_assets, system_status, system_status_history"
+            "postgres" = "[SYSTEM] PostgreSQL Default Database - Used for PostgreSQL admin operations only"
+            "template0" = "[SYSTEM] PostgreSQL Template Database - Read-only template (DO NOT USE)"
+            "template1" = "[SYSTEM] PostgreSQL Template Database - Default template for new databases (DO NOT USE)"
         }
         
-        Write-Host "Databases with sizes and descriptions:" -ForegroundColor Yellow
+        Write-Host "=== User Databases (Photo Factory) ===" -ForegroundColor Green
         Write-Host ""
         
-        # Query databases with sizes
-        $dbQuery = "SELECT datname, pg_size_pretty(pg_database_size(datname)) as size FROM pg_database WHERE datistemplate = false ORDER BY pg_database_size(datname) DESC;"
-        $dbOutput = docker exec $container psql -U $user -d postgres -t -A -F "|" -c $dbQuery
+        # Query user databases only (exclude system templates)
+        $userDbQuery = "SELECT datname, pg_size_pretty(pg_database_size(datname)) as size FROM pg_database WHERE datistemplate = false ORDER BY pg_database_size(datname) DESC;"
+        $dbOutput = docker exec $container psql -U $user -d postgres -t -A -F "|" -c $userDbQuery
         
         if ($dbOutput) {
             $dbOutput -split "`n" | ForEach-Object {
@@ -75,7 +77,8 @@ switch ($Command.ToLower()) {
                             "[UNKNOWN] Unknown Database"
                         }
                         
-                        Write-Host "  $dbName" -ForegroundColor Green -NoNewline
+                        $color = if ($dbName -eq "photo_factory") { "Green" } else { "Yellow" }
+                        Write-Host "  $dbName" -ForegroundColor $color -NoNewline
                         Write-Host " ($dbSize)" -ForegroundColor Gray -NoNewline
                         Write-Host " - $description" -ForegroundColor White
                     }
@@ -84,7 +87,39 @@ switch ($Command.ToLower()) {
         }
         
         Write-Host ""
-        Write-Host "Full database details (PostgreSQL format):" -ForegroundColor Yellow
+        Write-Host "=== System Databases (PostgreSQL) ===" -ForegroundColor Yellow
+        Write-Host "These are PostgreSQL system databases, not for application use:" -ForegroundColor Gray
+        Write-Host ""
+        
+        # Show system databases
+        $systemDbQuery = "SELECT datname, pg_size_pretty(pg_database_size(datname)) as size FROM pg_database WHERE datistemplate = true ORDER BY datname;"
+        $systemOutput = docker exec $container psql -U $user -d postgres -t -A -F "|" -c $systemDbQuery
+        
+        if ($systemOutput) {
+            $systemOutput -split "`n" | ForEach-Object {
+                $line = $_.Trim()
+                if ($line -and $line -notmatch "^\s*$") {
+                    $parts = $line -split "\|"
+                    if ($parts.Length -ge 2) {
+                        $dbName = $parts[0].Trim()
+                        $dbSize = $parts[1].Trim()
+                        
+                        $description = if ($dbDescriptions.ContainsKey($dbName)) {
+                            $dbDescriptions[$dbName]
+                        } else {
+                            "[SYSTEM] PostgreSQL System Database"
+                        }
+                        
+                        Write-Host "  $dbName" -ForegroundColor DarkGray -NoNewline
+                        Write-Host " ($dbSize)" -ForegroundColor Gray -NoNewline
+                        Write-Host " - $description" -ForegroundColor DarkGray
+                    }
+                }
+            }
+        }
+        
+        Write-Host ""
+        Write-Host "=== All Databases (PostgreSQL format) ===" -ForegroundColor Cyan
         docker exec $container psql -U $user -d postgres -c "\l"
     }
     "tables" {

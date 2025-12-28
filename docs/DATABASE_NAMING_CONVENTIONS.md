@@ -32,12 +32,28 @@
 
 ### Current Databases
 
-| Database Name | Purpose | Container | Owner |
-|--------------|---------|-----------|-------|
-| `photo_factory` | Main Photo Factory database (media assets, system status) | `factory_postgres` | `photo_factory` |
-| `postgres` | Default PostgreSQL database (system/admin) | `factory_postgres` | `photo_factory` |
-| `template0` | PostgreSQL template database (system) | `factory_postgres` | `photo_factory` |
-| `template1` | PostgreSQL template database (system) | `factory_postgres` | `photo_factory` |
+**User Databases (Photo Factory):**
+
+| Database Name | Purpose | Contains Tables | Container |
+|--------------|---------|----------------|-----------|
+| `photo_factory` | **Main Photo Factory application database** | `media_assets`, `system_status`, `system_status_history` | `factory_postgres` |
+
+**System Databases (PostgreSQL):**
+
+| Database Name | Purpose | Notes |
+|--------------|---------|-------|
+| `postgres` | Default PostgreSQL database | Used for PostgreSQL admin operations, not for application data |
+| `template0` | PostgreSQL template database | **Read-only** template used when creating new databases. Do not modify. |
+| `template1` | PostgreSQL default template | Template that new databases copy from. Can be customized (not recommended). |
+
+**Important Notes:**
+- **Only ONE user database exists:** `photo_factory`
+- All Photo Factory tables are in `photo_factory`:
+  - `media_assets` - Tracks all processed photos/videos
+  - `system_status` - Current service heartbeats (fast lookup)
+  - `system_status_history` - Historical service heartbeats (time-series)
+- `template0` and `template1` are PostgreSQL system databases, not application databases
+- `postgres` is the default PostgreSQL database (used for admin, not application data)
 
 ### Table Naming
 
