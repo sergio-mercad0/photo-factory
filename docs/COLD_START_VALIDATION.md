@@ -21,24 +21,52 @@ Verify that all services start correctly from a cold state, ensuring:
 
 ### 2. Cold Start Steps
 
-1. **Reboot Windows** (or ensure Docker Desktop is stopped)
+**Option A: Full Cleanup (Recommended for true cold start test)**
 
-2. **Start Docker Desktop**
+1. **Clean up existing containers and images:**
+   ```powershell
+   cd D:\Photo_Factory\Stack\App_Data
+   .\cleanup_for_cold_start.ps1
+   ```
+   - This script safely removes containers and images
+   - **Data volumes are preserved** (database, Syncthing config, etc.)
+   - You can choose to remove images for a full rebuild test
+
+2. **Reboot Windows** (or ensure Docker Desktop is stopped)
+
+3. **Start Docker Desktop**
    - Wait for Docker to fully start (whale icon in system tray)
 
-3. **Navigate to docker-compose directory:**
+4. **Navigate to docker-compose directory:**
    ```powershell
    cd D:\Photo_Factory\Stack\App_Data
    ```
 
-4. **Build all services:**
+5. **Build all services:**
    ```powershell
    docker-compose build
    ```
    - This will run tests during build (Build Gate Protocol)
    - All builds must succeed
 
-5. **Start all services:**
+6. **Start all services:**
+   ```powershell
+   docker-compose up -d
+   ```
+
+**Option B: Quick Restart (without cleanup)**
+
+If you just want to test restart without full cleanup:
+
+1. **Stop all services:**
+   ```powershell
+   cd D:\Photo_Factory\Stack\App_Data
+   docker-compose down
+   ```
+
+2. **Restart Docker Desktop** (or reboot Windows)
+
+3. **Start services:**
    ```powershell
    docker-compose up -d
    ```
