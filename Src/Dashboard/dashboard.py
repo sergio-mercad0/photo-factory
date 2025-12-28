@@ -250,7 +250,11 @@ def get_available_services() -> list:
             
             # Check if it's a known service (exact match first, then substring) OR has photo-factory in image name OR container name
             is_known_service = name in known_services or any(known in name for known in known_services)
-            has_photo_factory = "photo-factory" in image_name.lower() or "photo-factory" in name.lower()
+            has_photo_factory = ("photo-factory" in image_name.lower() if image_name else False) or "photo-factory" in name.lower()
+            
+            # Debug logging for service_monitor
+            if "service" in name.lower() and "monitor" in name.lower():
+                logger.info(f"Service discovery: name='{name}', image='{image_name}', is_known={is_known_service}, has_photo_factory={has_photo_factory}")
             
             if is_known_service or has_photo_factory:
                 service_names.append(name)
@@ -492,6 +496,8 @@ def main():
                         container_name = svc["name"]
                         if container_name == "factory_postgres":
                             service_name_for_interval = "factory-db"
+                        elif container_name == "syncthing":
+                            service_name_for_interval = "syncthing"
                         else:
                             service_name_for_interval = container_name.split("_")[0] if "_" in container_name else container_name
                     
@@ -499,7 +505,7 @@ def main():
                     
                     time_since = datetime.now() - svc["heartbeat"]["last_heartbeat"]
                     seconds_ago = int(time_since.total_seconds())
-                    ratio = seconds_ago / expected_interval
+                    ratio = seconds_ago / expected_interval if expected_interval > 0 else 0
                     
                     # Color based on ratio: <1.0 = green, 1.0-2.0 = yellow, >=2.0 = red
                     if ratio < 1.0:
