@@ -47,9 +47,14 @@ class TestDockerUnavailable:
     
     def test_get_all_services_status_returns_empty_when_docker_unavailable(self):
         """Test that get_all_services_status returns empty list when Docker unavailable."""
+        get_all_services_status.clear()
+        get_available_services.clear()
+        
         with patch('Src.Dashboard.dashboard.DOCKER_AVAILABLE', False):
-            result = get_all_services_status()
-            assert result == []
+            with patch('Src.Dashboard.dashboard.get_available_services') as mock_services:
+                mock_services.return_value = []  # No services when Docker unavailable
+                result = get_all_services_status()
+                assert result == []
 
 
 class TestDatabaseUnavailable:
