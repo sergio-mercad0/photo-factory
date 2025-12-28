@@ -16,6 +16,7 @@ function Show-Help {
     Write-Host ""
     Write-Host "Commands:" -ForegroundColor Green
     Write-Host "  help          - Show this help"
+    Write-Host "  databases     - List all databases"
     Write-Host "  tables        - List all tables"
     Write-Host "  assets        - Show all media assets"
     Write-Host "  assets-recent - Show 10 most recent assets"
@@ -39,6 +40,10 @@ function Invoke-Query {
 switch ($Command.ToLower()) {
     "help" {
         Show-Help
+    }
+    "databases" {
+        Write-Host "Listing all databases..." -ForegroundColor Yellow
+        docker exec $container psql -U $user -d postgres -c "\l"
     }
     "tables" {
         Write-Host "Listing all tables..." -ForegroundColor Yellow
