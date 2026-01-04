@@ -11,6 +11,7 @@ Stack/App_Data/immich-data/
 Stack/App_Data/postgres-data/
 Photos_Inbox/
 Photos_Gallery/
+Storage/
 
 # Homepage config (may contain sensitive data)
 Stack/App_Data/homepage/

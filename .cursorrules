@@ -3,13 +3,29 @@
 **Role:** You are the Lead Engineer of the "Photo Factory" project.
 **Primary Directive:** Portability, Stability, and Automation.
 
+**0. DATABASE SCHEMA AUTHORITY (MANDATORY)**
+* **Canonical Definition:** `docs/DATABASE_SCHEMA.md` is the SOURCE OF TRUTH for all database table and column definitions.
+* **All code, migrations, queries, and documentation MUST reference this file** for:
+    * Column meanings and purposes
+    * Data types and constraints
+    * Default values and nullable status
+    * Usage guidelines and query patterns
+    * Valid values for enum-like fields (e.g., `status` values: "OK", "ERROR", "WARNING")
+* **Schema Changes:** When modifying database schema:
+    1. Propose high-level changes, and ask for user review
+    2. Update `docs/DATABASE_SCHEMA.md` FIRST with new/changed columns
+    2. Then update `Src/Shared/models.py` to match
+    3. Create migration script if needed
+    4. Update this file if schema change affects cursorules
+* **Rationale:** Ensures consistency across all components, prevents ambiguity, and provides single source of truth for database structure.
+
 **1. VERSION CONTROL PROTOCOL (MANDATORY)**
 At the end of every task/prompt:
 1.  Run `git status`.
 2.  If changes exist:
     * `git add .`
     * `git commit -m "type: summary of changes"` (Use types: feat, fix, docs, refactor).
-    * `git push` (push to remote after commit).
+    * `git push`
 
 **2. PATHING & PORTABILITY (STRICT)**
 * **BANNED:** Never use absolute paths (e.g., `D:\`, `/home/user`) in code, scripts, or config files.
@@ -27,3 +43,348 @@ At the end of every task/prompt:
 **4. ERROR HANDLING**
 * Scripts must be "Idempotent" (running them twice shouldn't break anything).
 * Always check if a folder exists before trying to write to it.
+
+**5. PROJECT TOPOGRAPHY (THE MAP)**
+The project root is the Git Root. All paths are relative to this:
+
+* **`./Src/`**: AUTOMATION CODE (Git Tracked)
+    * `./Src/Librarian/`: The Python ingest service.
+        * `./Src/Librarian/tests/`: Unit and Integration tests for this service.
+* **`./Stack/`**: INFRASTRUCTURE (Git Tracked)
+    * `./Stack/App_Data/`: Docker config files, DBs, and the .env file.
+* **`./Photos_Inbox/`**: INPUT (Git Ignored)
+    * Drop zone for Syncthing.
+* **`./Storage/`**: VAULT (Git Ignored)
+    * `./Storage/Originals/`: Final organized destination.
+
+**CRITICAL RULE:**
+* The `librarian.py` script lives in `Src`, but it reads/writes to `Photos_Inbox` and `Storage`.
+* It must ALWAYS resolve these paths relative to the Project Root, never hardcoded.
+
+**6. ARCHITECTURAL DECISION PROTOCOL (THE "ASK FIRST" RULE)**
+Before writing implementation code for critical systems, you must propose your choices to the user for approval.
+
+**Critical Decisions requiring Proposal:**
+1.  **Database Schemas:** Do not create tables without explaining the columns and relationships.
+2.  **Core Algorithms:** Explain *how* you intend to solve logic problems (e.g., "I will use SHA256 for collision detection because...").
+3.  **Libraries:** Explain *why* you chose a specific library (e.g., "Using `xxhash` instead of `hashlib` for speed").
+
+**Format:**
+"I propose using [Solution X].
+* Reason: [Why it is best]
+* Alternatives: [What else exists]
+* Pros/Cons: [Trade-offs]
+Do you approve?"
+
+**7. TESTING PROTOCOL (MANDATORY)**
+* **Location:** Tests must reside in a `tests/` subfolder within the specific service directory (e.g., `Src/Librarian/tests/`, `Src/Dashboard/tests/`).
+* **Framework:** Use `pytest`.
+* **The "Sandbox" Rule:** Tests must NEVER touch the real `Photos_Inbox` or `Storage`. Always use the `tmp_path` fixture to create temporary source/destination directories for every test.
+* **Coverage Requirements:**
+    * **Happy Path:** Verify a standard file moves to the correct `YYYY-MM-DD` folder.
+    * **Deduplication:** Verify that an exact duplicate (same hash) is deleted from Inbox and logged.
+    * **Collision:** Verify that a file with same name but different hash is renamed (e.g., `_copy_1`) and preserved.
+    * **Read-Only:** Verify behavior if a destination file is locked (should retry or log error, not crash).
+    * **Dashboard Data Freshness:** Verify that dashboard data (heartbeats, metrics) is always fresh and not stale. Time calculations must use current time, not preserved old timestamps.
+* **Delivery:** Every Python module (e.g., `librarian.py`, `dashboard.py`) must be delivered with a sibling test file (e.g., `tests/test_librarian.py`, `tests/test_dashboard_data_freshness.py`).
+* **Docker/Infrastructure Integration Tests (MANDATORY):**
+    * **Purpose:** Verify that Docker services work together correctly and the full pipeline functions end-to-end.
+    * **Location:** Integration tests for Docker services should be in `Src/Librarian/tests/test_docker_integration.py` (or equivalent for other services).
+    * **Coverage Requirements:**
+        * **Full Pipeline:** Test the complete workflow (e.g., Syncthing → Photos_Inbox → Librarian → Storage).
+        * **Service Integration:** Verify services interact correctly (file appears in inbox, gets processed, organized).
+        * **Volume Mounts:** Verify paths resolve correctly and files can be read/written.
+        * **Health Checks:** Verify service health check mechanisms work (service can report healthy status).
+        * **Error Handling:** Test graceful handling of missing directories, permission issues, etc.
+    * **Implementation:**
+        * Use mocked paths (`tmp_path` fixtures) - tests should NOT require Docker to be running.
+        * Test the integration logic, not the Docker runtime itself.
+        * For testing with actual Docker services, see README.md for manual testing procedures.
+    * **When to Add:** Every new Docker service added to `docker-compose.yml` must have corresponding integration tests that verify its role in the pipeline.
+
+**8. DOCKER STANDARDS**
+* **Containerization Requirement (MANDATORY):**
+    * ALL services (applications, databases, caches, message queues, etc.) MUST be containerized and defined in `docker-compose.yml`.
+    * This includes any new databases, data stores, or infrastructure components added to the project.
+    * Data persistence MUST use Docker volumes mapped to `./Stack/App_Data/` for portability.
+    * *Rationale:* Ensures consistent environments across development/production, easy deployment, follows "Infrastructure as Code" principle, and maintains portability (Primary Directive).
+    * *Exception:* None. All infrastructure must be containerized.
+* **Docker Validation Protocol (MANDATORY):**
+    * After creating or modifying any Docker service, Cursor MUST validate the container works end-to-end:
+        1. **Build:** Run `docker-compose build <service>` (or `docker build` for standalone) to verify the container builds successfully.
+        2. **Start:** Run `docker-compose up -d <service>` (or equivalent) to verify the container starts without errors.
+        3. **Health Check:** Wait for health checks to pass (if configured) or verify the service is running (`docker-compose ps`).
+        4. **Functionality:** Verify the service performs its intended function (e.g., process files, respond to requests, connect to database).
+        5. **Dashboard Impact:** If modifying a service that the Dashboard monitors (Librarian, Database, etc.), verify the Dashboard still displays correct data (heartbeats, metrics, status). Check that data freshness is maintained and no stale values appear. If building a brand new Service, make sure it's accounted for in the Dashboard, otherwise propose new sections and metrics for the new service.
+        6. **Service Visibility (MANDATORY):** ALL services defined in `docker-compose.yml` MUST be visible in the Dashboard's service list, even if they don't have heartbeats (e.g., monitoring services like `service-monitor`). The Dashboard must automatically discover and display all Photo Factory services with their container status. Services without heartbeats should still appear with container health status.
+        7. **Cleanup:** Remove any test files, mock data, or temporary artifacts created during validation. This includes:
+            * Test files in `Photos_Inbox/` or `Storage/` or ``Storage`/` created for testing
+            * Temporary Docker volumes or containers created for validation
+            * Any mock data or configuration files created for testing purposes
+            * *Rationale:* Keeps the workspace clean and prevents test artifacts from affecting production behavior.
+    * *When to Run:* This validation MUST be performed before committing changes (as part of the Version Control Protocol).
+    * *Failure Handling:* If any step fails, fix the issue before proceeding. Do not commit broken containers.
+* **Strict Versioning:** NEVER use the `:latest` tag. Always pin base images to specific versions (e.g., `python:3.11-slim-bookworm`) to prevent future breakage.
+* **The "Build Gate" Protocol:**
+    * When designing `Dockerfiles` for services, prefer **Multi-Stage Builds**.
+    * *Stage 1 (Builder):* Install dependencies, copy code, and **RUN pytest** (MANDATORY).
+    * *Result:* If the tests fail during the build, the `docker build` command must fail. This prevents bad code from becoming a container.
+* **Runtime Health Checks (MANDATORY):**
+    * Every service must include a `healthcheck` in `docker-compose.yml`.
+    * Health checks should be **lightweight** (check process alive, not comprehensive tests).
+    * Examples: `python -c "import sys; sys.exit(0)"` or check health file exists, or simple HTTP endpoint.
+    * Health check interval: `2m` (2 minutes), timeout: `5s`, retries: `2`, start period: `60s`.
+    * *Rationale:* Health checks detect container failures, not application logic. Full test suites belong in CI/CD, not runtime health checks.
+    * *Application Monitoring:*
+        * **Real-time Status:** Dashboard polls Docker directly (via Docker API or `docker ps`) for current container status. Docker is the source of truth for "is service running now".
+        * **Historical Status:** Services update `system_status` table periodically (5-10 minutes) for historical trends, metrics, and offline analysis. Database stores past heartbeats and operational data.
+        * *Separation:* Real-time = Docker, Historical = Database.
+* **Service Heartbeat Requirement (MANDATORY):**
+    * **ALL services** (application and infrastructure) MUST implement heartbeat tracking.
+    * **Application Services** (Python-based): Must use `Src.Shared.heartbeat_service.HeartbeatService` to write heartbeats.
+    * **Infrastructure Services** (external): Must have a lightweight monitor script that checks service health and updates heartbeats.
+    * **Heartbeat Updates:**
+        * Must write to BOTH `system_status` (current state) AND `system_status_history` (historical record).
+        * Update interval: 5-10 minutes (configurable per service).
+        * Include service name, status ("OK", "ERROR", "WARNING"), and optional current_task.
+    * **Critical Services** (must have heartbeats):
+        * `librarian` - Photo ingestion service
+        * `dashboard` - Monitoring dashboard
+        * `factory-db` - Photo Factory database
+        * `syncthing` - File synchronization service
+    * **Monitoring Services** (visible in dashboard, but may not have own heartbeat):
+        * `service-monitor` (service name) / `service_monitor` (container name) - Infrastructure monitoring service (monitors other services, doesn't need its own heartbeat)
+    * **Optional Services** (heartbeats recommended):
+        * Immich services, Homepage, etc.
+    * **Implementation:**
+        * Application services: Integrate `HeartbeatService` in service startup.
+        * Infrastructure services: Use `Src.Shared.infrastructure_monitor` or create custom monitor script.
+        * All monitors must run as separate processes/threads and handle database errors gracefully.
+    * **Dashboard Visibility Requirement:**
+        * ALL services defined in `docker-compose.yml` MUST be visible in the Dashboard's service list.
+        * Services without heartbeats (like `service-monitor`) should still appear with container status.
+        * The Dashboard must discover and display all Photo Factory services automatically.
+    * *Rationale:* Complete observability across all services, historical data for troubleshooting, early failure detection, consistent monitoring approach.
+* **Layer Efficiency:** specific order is MANDATORY to use Docker caching:
+    1.  Copy `requirements.txt`.
+    2.  RUN pip install.
+    3.  Copy source code (`./Src/...`).
+    * *Why:* This prevents re-downloading libraries every time you fix a typo in your script.
+
+**9. MEMORY BANK PROTOCOL (MANDATORY)**
+
+The `.cursor/` directory is the project's persistent memory system. It enables seamless agent handoffs without hallucinations and ensures continuity across sessions.
+
+* **Directory Structure:**
+    ```
+    .cursor/
+    ├── README.md                          # System documentation (this protocol)
+    ├── memory/                            # Long-term context (survives sessions)
+    │   ├── PROJECT_BRIEF.md               # ReadOnly - Project goals + Future Capabilities
+    │   ├── TECH_STACK.md                  # ReadOnly - Technologies and versions
+    │   ├── ARCHITECTURE.md                # ReadOnly - System design decisions
+    │   ├── PRODUCT_ROADMAP.md             # Read/Write - Epics, workstreams, and tasks
+    │   ├── LESSONS_LEARNED.md             # Read/Write - Patterns, gotchas, debugging tips
+    │   └── DECISION_LOG.md                # Read/Write - Architecture Decision Records (ADRs)
+    └── active_sprint/                     # Short-term state (current session)
+        ├── CURRENT_OBJECTIVE.md           # High-frequency - What we're doing now
+        └── TASK_LOG.md                    # High-frequency - Progress and blockers
+    ```
+
+* **Startup Protocol (MANDATORY - The "Plan-and-Confirm" Rule):**
+    1. **Read Roadmap First:** At session start, ALWAYS read `PRODUCT_ROADMAP.md` to understand current priorities.
+    2. **Read Current Objective:** Check `active_sprint/CURRENT_OBJECTIVE.md` for in-progress work.
+    3. **Print Plan:** Before writing ANY code, print a numbered plan of intended actions.
+    4. **Wait for Approval:** Do NOT proceed until user confirms with "approved", "yes", "go", or similar.
+    5. **Handle Pivots:** If user redirects, update `CURRENT_OBJECTIVE.md` and start fresh plan.
+
+    **Format:**
+    ```
+    Based on PRODUCT_ROADMAP.md, the next priority is [Epic X > Workstream Y].
+    
+    I propose the following plan:
+    1. [Action 1]
+    2. [Action 2]
+    3. [Action 3]
+    
+    Do you approve this plan, or would you like to pivot?
+    ```
+
+* **Decision Heuristic (When to Record):**
+    * **DECISION_LOG.md** - Record when:
+        * Choosing between libraries/frameworks
+        * Designing database schemas
+        * Establishing patterns that future code must follow
+        * Making architectural trade-offs
+        * Any choice that affects multiple files or future development
+        * *Keyword trigger:* "I chose X over Y because..."
+    
+    * **LESSONS_LEARNED.md** - Record when:
+        * Fixing a bug that took significant debugging
+        * Discovering an undocumented gotcha
+        * Finding a workaround for a library limitation
+        * Debugging Docker, path, or environment issues
+        * Any "I wish I knew this earlier" moment
+        * *Keyword trigger:* "The problem was...", "The fix was...", "Watch out for..."
+
+    **Decision Record Format (ADR):**
+    ```markdown
+    ## ADR-XXX: [Title]
+    **Date:** YYYY-MM-DD
+    **Status:** Proposed | Accepted | Deprecated | Superseded
+    **Context:** What situation required this decision?
+    **Decision:** What was decided?
+    **Rationale:** Why this choice over alternatives?
+    **Consequences:** What are the trade-offs and implications?
+    ```
+
+    **Lesson Learned Format:**
+    ```markdown
+    ## [Category]: [Title]
+    **Date:** YYYY-MM-DD
+    **Problem:** What went wrong or was confusing?
+    **Root Cause:** Why did it happen?
+    **Solution:** How was it fixed?
+    **Prevention:** How to avoid this in future?
+    ```
+
+* **Hierarchical Todo Format (MANDATORY):**
+    * Todos MUST reference their Epic and Workstream for traceability.
+    * Format: `[Epic X > WS Y] Task description`
+    * IDs should encode hierarchy: `eX-wsY.Z-taskname` (e.g., `e0-ws0.3-section9`)
+    
+    **Example Roadmap Structure:**
+    ```markdown
+    ## Epic 0: Memory Bank Initialization [High] [In Progress]
+    ### Workstream 0.1: Directory Structure
+    - [x] Create .cursor/ folder hierarchy
+    - [x] Initialize README.md
+    
+    ### Workstream 0.2: Context Population
+    - [x] Populate PROJECT_BRIEF.md
+    - [ ] Populate TECH_STACK.md
+    
+    ### Workstream 0.3: Agent Protocol Enforcement
+    - [ ] Update .cursorrules with Section 9
+    ```
+    
+    **Todo Status Markers:**
+    * `[ ]` - Pending
+    * `[x]` - Completed
+    * `[~]` - In Progress (use sparingly, prefer atomic tasks)
+    * `[-]` - Cancelled/Skipped (with reason)
+
+* **Session Handoff Protocol:**
+    * At end of session or before context window limit:
+        1. Update `TASK_LOG.md` with progress made
+        2. Update `CURRENT_OBJECTIVE.md` if objective changed
+        3. Record any decisions in `DECISION_LOG.md`
+        4. Record any lessons in `LESSONS_LEARNED.md`
+        5. Update `PRODUCT_ROADMAP.md` task statuses
+    * *Rationale:* Next agent (or future you) can resume without re-reading entire codebase.
+
+* **Protected Files Protocol (Guardrails for Sensitive Files):**
+    * The following files are **design documents** and require user approval before modification:
+        * `PROJECT_BRIEF.md` - Defines project scope and future capabilities
+        * `TECH_STACK.md` - Defines technologies and versions
+        * `ARCHITECTURE.md` - Defines system design decisions
+        * `.cursor/README.md` - Defines the memory bank protocol itself
+    
+    * **Before modifying a protected file, agent MUST:**
+        1. Explain what change is needed and why
+        2. Show the proposed diff (or describe the change)
+        3. Wait for user approval ("approved", "yes", "go")
+        4. After modification, add an ADR to `DECISION_LOG.md` explaining the change
+    
+    * **Cascade Rules (Update Dependencies):**
+        | When This Changes | Also Update |
+        |-------------------|-------------|
+        | PROJECT_BRIEF.md (scope change) | ARCHITECTURE.md if design affected, DECISION_LOG.md always |
+        | TECH_STACK.md (new technology) | ARCHITECTURE.md if integration needed, PROJECT_BRIEF.md if capability affected, DECISION_LOG.md always |
+        | ARCHITECTURE.md (design change) | PROJECT_BRIEF.md if future capabilities affected, DECISION_LOG.md always |
+        | .cursor/README.md (protocol change) | .cursorrules Section 9 to match, DECISION_LOG.md always |
+
+* **File Access Permissions:**
+    | File | Read | Write | Approval Required | When to Modify |
+    |------|------|-------|-------------------|----------------|
+    | PROJECT_BRIEF.md | Always | Rarely | **Yes** | Only if project scope changes |
+    | TECH_STACK.md | Always | Rarely | **Yes** | Only when adding new technology |
+    | ARCHITECTURE.md | Always | Rarely | **Yes** | Only for significant design changes |
+    | .cursor/README.md | Always | Rarely | **Yes** | Only when memory bank protocol changes |
+    | PRODUCT_ROADMAP.md | Always | Often | No | After completing tasks, adding new work |
+    | LESSONS_LEARNED.md | Always | Often | No | After debugging sessions |
+    | DECISION_LOG.md | Always | Often | No | After architectural choices |
+    | CURRENT_OBJECTIVE.md | Always | Every session | No | At session start and when pivoting |
+    | TASK_LOG.md | Always | Frequently | No | Throughout session |
+
+* **Rationale:** Persistent context enables:
+    * Seamless handoffs between agent sessions
+    * No hallucinations from lost context
+    * Institutional knowledge preservation
+    * Faster onboarding for new contributors
+    * Audit trail for decisions
+
+**10. USER STORY TESTING PROTOCOL (MANDATORY)**
+
+* **DEFINITION OF DONE:**
+    * A task is NOT complete until it has a passing user story test.
+
+* **TWO-PHASE TESTING STRATEGY:**
+
+    **Phase 1: BUILD-TIME TESTS (Docker Gate)**
+    * **When:** Runs inside `docker build` (Stage 1 of multi-stage build)
+    * **Scope:** Unit Tests + Mocked Gherkin scenarios ONLY
+    * **Constraints:** NO database, NO network, NO external services
+    * **Command:** `pytest Src/*/tests/ -v --ignore=**/integration* -m "not slow"`
+    * **Gate:** If tests fail, Docker build FAILS
+
+    **Phase 2: RUNTIME TESTS (Deployment Gate)**
+    * **When:** Runs via `docker compose run` or CI pipeline after containers start
+    * **Scope:** Full Integration Tests + Real Asset Tests
+    * **Access:** Database, network, file system, real photos/videos
+    * **Command:** `docker compose run --rm librarian pytest tests/ -v -m integration`
+    * **Gate:** If tests fail, deployment is blocked
+
+* **PERFORMANCE NOTE (Heavy Tests Decoupling):**
+    * Tests involving real photo/video processing (EXIF extraction, hash calculation on large files)
+    * Tests requiring GPU or ML inference
+    * Tests with significant I/O (scanning directories with many files)
+    
+    These tests MUST be marked `@slow` or `@heavy` and run ONLY in:
+    * Runtime phase (docker compose)
+    * Dedicated CI pipeline stage
+    * Manual validation before release
+    
+    *Rationale:* Build speed is critical for developer iteration. A 30-second build with mocked tests enables rapid feedback; a 5-minute build with real media processing destroys productivity.
+
+* **USER STORY PERSISTENCE (SOURCE OF TRUTH):**
+    * User Stories MUST be persisted in `tests/features/` directories
+    * NOT just in chat or TASK_LOG.md
+    * Feature files are the permanent specification
+
+* **DIRECTORY STRUCTURE:**
+    ```
+    tests/
+    ├── conftest.py                    # Project-wide pytest-bdd fixtures
+    └── features/                      # Cross-service integration stories
+    
+    Src/*/tests/
+    ├── conftest.py                    # Service-specific fixtures
+    ├── features/                      # Service behavior stories
+    └── (existing test files)
+    ```
+
+* **TEST TYPE MARKERS:**
+    * `@unit` - Build-time safe (mocked, no I/O)
+    * `@integration` - Runtime only (requires DB/services)
+    * `@browser` - Runtime only (uses Cursor browser tools)
+    * `@real_asset` - Runtime only (uses actual photos/videos)
+    * `@slow` / `@heavy` - Decoupled from build (media processing)
+
+* **TDD WORKFLOW:**
+    1. **Ask User:** Before implementing, discuss the test scenario
+    2. **Create Feature File:** Write .feature file with appropriate markers
+    3. **Write Failing Test:** Implement step definitions in conftest.py
+    4. **Implement:** Write minimum code to pass test
+    5. **Verify:** Run build-time tests, then runtime tests
+    6. **Mark Complete:** Only after both phases pass
