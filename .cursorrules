@@ -283,17 +283,39 @@ The `.cursor/` directory is the project's persistent memory system. It enables s
         5. Update `PRODUCT_ROADMAP.md` task statuses
     * *Rationale:* Next agent (or future you) can resume without re-reading entire codebase.
 
+* **Protected Files Protocol (Guardrails for Sensitive Files):**
+    * The following files are **design documents** and require user approval before modification:
+        * `PROJECT_BRIEF.md` - Defines project scope and future capabilities
+        * `TECH_STACK.md` - Defines technologies and versions
+        * `ARCHITECTURE.md` - Defines system design decisions
+        * `.cursor/README.md` - Defines the memory bank protocol itself
+    
+    * **Before modifying a protected file, agent MUST:**
+        1. Explain what change is needed and why
+        2. Show the proposed diff (or describe the change)
+        3. Wait for user approval ("approved", "yes", "go")
+        4. After modification, add an ADR to `DECISION_LOG.md` explaining the change
+    
+    * **Cascade Rules (Update Dependencies):**
+        | When This Changes | Also Update |
+        |-------------------|-------------|
+        | PROJECT_BRIEF.md (scope change) | ARCHITECTURE.md if design affected, DECISION_LOG.md always |
+        | TECH_STACK.md (new technology) | ARCHITECTURE.md if integration needed, PROJECT_BRIEF.md if capability affected, DECISION_LOG.md always |
+        | ARCHITECTURE.md (design change) | PROJECT_BRIEF.md if future capabilities affected, DECISION_LOG.md always |
+        | .cursor/README.md (protocol change) | .cursorrules Section 9 to match, DECISION_LOG.md always |
+
 * **File Access Permissions:**
-    | File | Read | Write | When to Modify |
-    |------|------|-------|----------------|
-    | PROJECT_BRIEF.md | Always | Rarely | Only if project scope changes |
-    | TECH_STACK.md | Always | Rarely | Only when adding new technology |
-    | ARCHITECTURE.md | Always | Rarely | Only for significant design changes |
-    | PRODUCT_ROADMAP.md | Always | Often | After completing tasks, adding new work |
-    | LESSONS_LEARNED.md | Always | Often | After debugging sessions |
-    | DECISION_LOG.md | Always | Often | After architectural choices |
-    | CURRENT_OBJECTIVE.md | Always | Every session | At session start and when pivoting |
-    | TASK_LOG.md | Always | Frequently | Throughout session |
+    | File | Read | Write | Approval Required | When to Modify |
+    |------|------|-------|-------------------|----------------|
+    | PROJECT_BRIEF.md | Always | Rarely | **Yes** | Only if project scope changes |
+    | TECH_STACK.md | Always | Rarely | **Yes** | Only when adding new technology |
+    | ARCHITECTURE.md | Always | Rarely | **Yes** | Only for significant design changes |
+    | .cursor/README.md | Always | Rarely | **Yes** | Only when memory bank protocol changes |
+    | PRODUCT_ROADMAP.md | Always | Often | No | After completing tasks, adding new work |
+    | LESSONS_LEARNED.md | Always | Often | No | After debugging sessions |
+    | DECISION_LOG.md | Always | Often | No | After architectural choices |
+    | CURRENT_OBJECTIVE.md | Always | Every session | No | At session start and when pivoting |
+    | TASK_LOG.md | Always | Frequently | No | Throughout session |
 
 * **Rationale:** Persistent context enables:
     * Seamless handoffs between agent sessions
