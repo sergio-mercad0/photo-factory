@@ -1,102 +1,140 @@
 # Memory Bank System
 
-## Overview
+**Purpose:** Persistent context structure for seamless AI agent handoffs without hallucinations.
 
-The Memory Bank is a persistent context structure that enables seamless AI agent handoffs without hallucinations. It provides both long-term project memory and short-term session tracking.
-
-## Purpose
-
-- **Eliminate Context Loss**: New agents can quickly understand project state
-- **Prevent Hallucinations**: Documented decisions prevent agents from making conflicting choices
-- **Enable Continuity**: Work can be paused and resumed without losing progress
-- **Track Progress**: Clear visibility into what's done, in progress, and planned
+---
 
 ## Directory Structure
 
 ```
 .cursor/
-├── README.md                    # This file - System documentation
-├── memory/                      # Long-term context (rarely changes)
-│   ├── PROJECT_BRIEF.md         # ReadOnly - Project goals + Future Capabilities
-│   ├── TECH_STACK.md            # ReadOnly - Technologies and versions
-│   ├── ARCHITECTURE.md          # ReadOnly - System design and patterns
-│   ├── PRODUCT_ROADMAP.md       # Read/Write - Epics, workstreams, tasks
-│   ├── LESSONS_LEARNED.md       # Read/Write - Patterns and gotchas
-│   └── DECISION_LOG.md          # Read/Write - Architecture Decision Records
-└── active_sprint/               # Short-term state (high-frequency updates)
-    ├── CURRENT_OBJECTIVE.md     # What we're working on right now
-    └── TASK_LOG.md              # Progress log with timestamps
+├── README.md                    # This file - system documentation
+├── memory/                      # Long-term context (ReadOnly or Read/Write)
+│   ├── PROJECT_BRIEF.md         # Mission, scope, future capabilities
+│   ├── TECH_STACK.md            # Technologies and versions
+│   ├── ARCHITECTURE.md          # System design and data flow
+│   ├── PRODUCT_ROADMAP.md       # Epics, workstreams, tasks
+│   ├── LESSONS_LEARNED.md       # Patterns and gotchas
+│   └── DECISION_LOG.md          # Architecture Decision Records
+└── active_sprint/               # Short-term state (High-frequency updates)
+    ├── CURRENT_OBJECTIVE.md     # Current session goal
+    └── TASK_LOG.md              # Progress tracking
 ```
 
-## Agent Protocol
+---
 
-### On Session Start
+## File Purposes
 
-1. **Read Roadmap**: Check `memory/PRODUCT_ROADMAP.md` for current priorities
-2. **Print Plan**: Show user the proposed plan before executing
-3. **Get Approval**: Wait for user to approve or pivot
-4. **Resume Work**: Check `active_sprint/CURRENT_OBJECTIVE.md` for in-progress work
+### Long-Term Context (`memory/`)
 
-### During Work
+| File | Update Frequency | Purpose |
+|------|-----------------|---------|
+| `PROJECT_BRIEF.md` | Rarely | Mission, scope, future capabilities |
+| `TECH_STACK.md` | On dependency changes | Technologies, versions, packages |
+| `ARCHITECTURE.md` | On structural changes | System design, data flow, modules |
+| `PRODUCT_ROADMAP.md` | Weekly/Sprint | Epics, workstreams, task status |
+| `LESSONS_LEARNED.md` | After issues | Patterns, gotchas, debugging tips |
+| `DECISION_LOG.md` | On architecture decisions | ADRs (Architecture Decision Records) |
 
-1. **Update Task Log**: Record progress in `active_sprint/TASK_LOG.md`
-2. **Record Decisions**: Architecture decisions → `memory/DECISION_LOG.md`
-3. **Record Learnings**: Patterns and gotchas → `memory/LESSONS_LEARNED.md`
-4. **Track Todos**: Use hierarchical format: `[Epic X > WS Y.Z] Task`
+### Short-Term Context (`active_sprint/`)
 
-### On Session End
+| File | Update Frequency | Purpose |
+|------|-----------------|---------|
+| `CURRENT_OBJECTIVE.md` | Per session | What agent is currently working on |
+| `TASK_LOG.md` | Per task | Detailed progress, blockers, notes |
 
-1. **Update Objective**: Note any incomplete work
-2. **Update Roadmap**: Mark completed tasks
-3. **Commit Changes**: Follow Version Control Protocol
+---
 
-## File Descriptions
+## Agent Startup Protocol
 
-### Long-Term Memory (`memory/`)
+When a new agent session begins:
 
-| File | Purpose | Update Frequency |
-|------|---------|------------------|
-| `PROJECT_BRIEF.md` | Mission, scope, and future capabilities | Rarely (project pivots only) |
-| `TECH_STACK.md` | Technologies, versions, dependencies | When stack changes |
-| `ARCHITECTURE.md` | System design, patterns, principles | When architecture evolves |
-| `PRODUCT_ROADMAP.md` | Epics, workstreams, task status | Each session |
-| `LESSONS_LEARNED.md` | Technical patterns, gotchas, warnings | When discoveries made |
-| `DECISION_LOG.md` | ADRs (Architecture Decision Records) | When decisions made |
+1. **Read Roadmap Context:**
+   - Read `memory/PRODUCT_ROADMAP.md`
+   - Read `active_sprint/CURRENT_OBJECTIVE.md` (if exists)
 
-### Short-Term State (`active_sprint/`)
+2. **Print Plan:**
+   ```
+   📋 Current Context:
+   - Epic: [Epic name and status]
+   - Workstream: [WS name and status]
+   - Tasks: [List of pending tasks]
+   
+   🎯 Proposed Actions:
+   1. [Action 1]
+   2. [Action 2]
+   ...
+   
+   Shall I proceed with this plan?
+   ```
 
-| File | Purpose | Update Frequency |
-|------|---------|------------------|
-| `CURRENT_OBJECTIVE.md` | Active session goal and context | Each session start/end |
-| `TASK_LOG.md` | Timestamped progress entries | Multiple times per session |
+3. **Await Approval:**
+   - Wait for user confirmation before executing
+   - Adjust plan if user provides different direction
 
-## Decision Heuristic
+4. **Execute & Update:**
+   - Work through tasks
+   - Update `TASK_LOG.md` with progress
+   - Update roadmap on task completion
 
-When to log where:
+---
 
-- **DECISION_LOG.md**: Architecture choices, technology selections, design patterns
-  - "I chose X over Y because..."
-  - "We will use pattern Z for..."
-  
-- **LESSONS_LEARNED.md**: Bugs found, constraints discovered, patterns observed
-  - "Docker health checks should be lightweight because..."
-  - "Always check X before Y because..."
+## Recording Guidelines
 
-## Test Types
+### When to Add a DECISION (DECISION_LOG.md)
 
-The Memory Bank system supports a two-phase testing strategy:
+Add a decision record when:
+- Choosing a technology or framework
+- Selecting an architecture pattern
+- Making a schema design choice
+- Picking an infrastructure approach
 
-| Marker | Phase | Description |
-|--------|-------|-------------|
-| `@unit` | Build-time | Mocked, no I/O |
-| `@integration` | Runtime | Requires DB/services |
-| `@browser` | Runtime | Uses browser tools |
-| `@real-asset` | Runtime | Uses actual photos/videos |
-| `@slow` / `@heavy` | Decoupled | Media processing |
+### When to Add a LESSON (LESSONS_LEARNED.md)
 
-## Integration with .cursorrules
+Add a lesson when:
+- Discovering a bug and its root cause
+- Learning about operational constraints
+- Finding performance insights
+- Solving tricky debugging scenarios
 
-The Memory Bank system is enforced via `.cursorrules` Sections 9 and 10:
-- Section 9: Memory Bank Protocol (startup, during, end behaviors)
-- Section 10: User Story Testing Protocol (two-phase testing)
+### Heuristic
 
+> **DECISION:** "We chose X because..."  
+> **LESSON:** "We learned that X causes Y when..."
+
+---
+
+## Todo Format
+
+When using the todo system, use hierarchical format:
+
+```
+[Epic X > WS Y.Z] Task description
+```
+
+Examples:
+- `[Epic 0 > WS 0.2] Write TECH_STACK.md from docker-compose and requirements`
+- `[Epic 2 > WS 2.1] Create system_status table`
+
+---
+
+## Maintenance
+
+### Regular Updates
+
+| Trigger | Action |
+|---------|--------|
+| Task completed | Update PRODUCT_ROADMAP.md |
+| Bug fixed | Add to LESSONS_LEARNED.md |
+| Architecture choice | Add ADR to DECISION_LOG.md |
+| Session end | Update CURRENT_OBJECTIVE.md |
+
+### Periodic Review
+
+- **Weekly:** Review PRODUCT_ROADMAP.md, update task statuses
+- **Monthly:** Review LESSONS_LEARNED.md, consolidate patterns
+- **Quarterly:** Review DECISION_LOG.md, validate decisions still valid
+
+---
+
+**END OF README**
