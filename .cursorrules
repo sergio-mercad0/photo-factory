@@ -170,3 +170,134 @@ Do you approve?"
     2.  RUN pip install.
     3.  Copy source code (`./Src/...`).
     * *Why:* This prevents re-downloading libraries every time you fix a typo in your script.
+
+**9. MEMORY BANK PROTOCOL (MANDATORY)**
+
+The `.cursor/` directory is the project's persistent memory system. It enables seamless agent handoffs without hallucinations and ensures continuity across sessions.
+
+* **Directory Structure:**
+    ```
+    .cursor/
+    ├── README.md                          # System documentation (this protocol)
+    ├── memory/                            # Long-term context (survives sessions)
+    │   ├── PROJECT_BRIEF.md               # ReadOnly - Project goals + Future Capabilities
+    │   ├── TECH_STACK.md                  # ReadOnly - Technologies and versions
+    │   ├── ARCHITECTURE.md                # ReadOnly - System design decisions
+    │   ├── PRODUCT_ROADMAP.md             # Read/Write - Epics, workstreams, and tasks
+    │   ├── LESSONS_LEARNED.md             # Read/Write - Patterns, gotchas, debugging tips
+    │   └── DECISION_LOG.md                # Read/Write - Architecture Decision Records (ADRs)
+    └── active_sprint/                     # Short-term state (current session)
+        ├── CURRENT_OBJECTIVE.md           # High-frequency - What we're doing now
+        └── TASK_LOG.md                    # High-frequency - Progress and blockers
+    ```
+
+* **Startup Protocol (MANDATORY - The "Plan-and-Confirm" Rule):**
+    1. **Read Roadmap First:** At session start, ALWAYS read `PRODUCT_ROADMAP.md` to understand current priorities.
+    2. **Read Current Objective:** Check `active_sprint/CURRENT_OBJECTIVE.md` for in-progress work.
+    3. **Print Plan:** Before writing ANY code, print a numbered plan of intended actions.
+    4. **Wait for Approval:** Do NOT proceed until user confirms with "approved", "yes", "go", or similar.
+    5. **Handle Pivots:** If user redirects, update `CURRENT_OBJECTIVE.md` and start fresh plan.
+
+    **Format:**
+    ```
+    Based on PRODUCT_ROADMAP.md, the next priority is [Epic X > Workstream Y].
+    
+    I propose the following plan:
+    1. [Action 1]
+    2. [Action 2]
+    3. [Action 3]
+    
+    Do you approve this plan, or would you like to pivot?
+    ```
+
+* **Decision Heuristic (When to Record):**
+    * **DECISION_LOG.md** - Record when:
+        * Choosing between libraries/frameworks
+        * Designing database schemas
+        * Establishing patterns that future code must follow
+        * Making architectural trade-offs
+        * Any choice that affects multiple files or future development
+        * *Keyword trigger:* "I chose X over Y because..."
+    
+    * **LESSONS_LEARNED.md** - Record when:
+        * Fixing a bug that took significant debugging
+        * Discovering an undocumented gotcha
+        * Finding a workaround for a library limitation
+        * Debugging Docker, path, or environment issues
+        * Any "I wish I knew this earlier" moment
+        * *Keyword trigger:* "The problem was...", "The fix was...", "Watch out for..."
+
+    **Decision Record Format (ADR):**
+    ```markdown
+    ## ADR-XXX: [Title]
+    **Date:** YYYY-MM-DD
+    **Status:** Proposed | Accepted | Deprecated | Superseded
+    **Context:** What situation required this decision?
+    **Decision:** What was decided?
+    **Rationale:** Why this choice over alternatives?
+    **Consequences:** What are the trade-offs and implications?
+    ```
+
+    **Lesson Learned Format:**
+    ```markdown
+    ## [Category]: [Title]
+    **Date:** YYYY-MM-DD
+    **Problem:** What went wrong or was confusing?
+    **Root Cause:** Why did it happen?
+    **Solution:** How was it fixed?
+    **Prevention:** How to avoid this in future?
+    ```
+
+* **Hierarchical Todo Format (MANDATORY):**
+    * Todos MUST reference their Epic and Workstream for traceability.
+    * Format: `[Epic X > WS Y] Task description`
+    * IDs should encode hierarchy: `eX-wsY.Z-taskname` (e.g., `e0-ws0.3-section9`)
+    
+    **Example Roadmap Structure:**
+    ```markdown
+    ## Epic 0: Memory Bank Initialization [High] [In Progress]
+    ### Workstream 0.1: Directory Structure
+    - [x] Create .cursor/ folder hierarchy
+    - [x] Initialize README.md
+    
+    ### Workstream 0.2: Context Population
+    - [x] Populate PROJECT_BRIEF.md
+    - [ ] Populate TECH_STACK.md
+    
+    ### Workstream 0.3: Agent Protocol Enforcement
+    - [ ] Update .cursorrules with Section 9
+    ```
+    
+    **Todo Status Markers:**
+    * `[ ]` - Pending
+    * `[x]` - Completed
+    * `[~]` - In Progress (use sparingly, prefer atomic tasks)
+    * `[-]` - Cancelled/Skipped (with reason)
+
+* **Session Handoff Protocol:**
+    * At end of session or before context window limit:
+        1. Update `TASK_LOG.md` with progress made
+        2. Update `CURRENT_OBJECTIVE.md` if objective changed
+        3. Record any decisions in `DECISION_LOG.md`
+        4. Record any lessons in `LESSONS_LEARNED.md`
+        5. Update `PRODUCT_ROADMAP.md` task statuses
+    * *Rationale:* Next agent (or future you) can resume without re-reading entire codebase.
+
+* **File Access Permissions:**
+    | File | Read | Write | When to Modify |
+    |------|------|-------|----------------|
+    | PROJECT_BRIEF.md | Always | Rarely | Only if project scope changes |
+    | TECH_STACK.md | Always | Rarely | Only when adding new technology |
+    | ARCHITECTURE.md | Always | Rarely | Only for significant design changes |
+    | PRODUCT_ROADMAP.md | Always | Often | After completing tasks, adding new work |
+    | LESSONS_LEARNED.md | Always | Often | After debugging sessions |
+    | DECISION_LOG.md | Always | Often | After architectural choices |
+    | CURRENT_OBJECTIVE.md | Always | Every session | At session start and when pivoting |
+    | TASK_LOG.md | Always | Frequently | Throughout session |
+
+* **Rationale:** Persistent context enables:
+    * Seamless handoffs between agent sessions
+    * No hallucinations from lost context
+    * Institutional knowledge preservation
+    * Faster onboarding for new contributors
+    * Audit trail for decisions
