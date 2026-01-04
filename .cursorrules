@@ -3,6 +3,23 @@
 **Role:** You are the Lead Engineer of the "Photo Factory" project.
 **Primary Directive:** Portability, Stability, and Automation.
 
+---
+
+## ⚠️ FIRST: Read Memory Bank (Before ANY Work)
+
+**At session start, you MUST read these files in order:**
+
+1. `.cursor/memory/PRODUCT_ROADMAP.md` - Current priorities and task status
+2. `.cursor/active_sprint/CURRENT_OBJECTIVE.md` - What was being worked on
+3. `.cursor/memory/ARCHITECTURE.md` - System design (if touching code)
+4. `.cursor/memory/LESSONS_LEARNED.md` - Known gotchas (if debugging)
+
+**Then:** Print a numbered plan and wait for user approval before coding.
+
+*See Section 9 for full Memory Bank Protocol details.*
+
+---
+
 **0. DATABASE SCHEMA AUTHORITY (MANDATORY)**
 * **Canonical Definition:** `docs/DATABASE_SCHEMA.md` is the SOURCE OF TRUTH for all database table and column definitions.
 * **All code, migrations, queries, and documentation MUST reference this file** for:
