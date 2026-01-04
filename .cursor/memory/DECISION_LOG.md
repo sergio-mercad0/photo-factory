@@ -337,5 +337,45 @@ CMD ["python", "-m", "Src.Service.main"]
 
 ---
 
+## ADR-009: pytest-bdd for User Story Testing
+
+**Date:** 2026-01-03  
+**Status:** Accepted  
+**Author:** Epic 0 WS 0.4
+
+### Context
+Need a framework for behavior-driven development (BDD) to write user story tests that serve as both documentation and executable specifications.
+
+### Decision
+Use pytest-bdd (>=7.0.0) for Gherkin-based feature files.
+
+### Rationale
+- **pytest Integration:** Native pytest plugin, works with existing test infrastructure
+- **Gherkin Syntax:** Industry-standard Given/When/Then format
+- **Fixtures Support:** Full pytest fixture support including `tmp_path`, mocks
+- **Markers:** Works with pytest markers for test categorization (@unit, @integration, @slow)
+- **Minimal Overhead:** Just add to requirements.txt and create conftest.py
+
+### Alternatives Considered
+| Option | Pros | Cons |
+|--------|------|------|
+| behave | Pure BDD, separate runner | Separate from pytest, different fixtures |
+| cucumber | Industry standard | Java-based, complex setup |
+| Robot Framework | Keyword-driven | Overkill for unit/integration tests |
+| Plain pytest | Already installed | No Gherkin, less readable specs |
+
+### Implementation
+- **Directory Structure:** Feature files in `tests/features/` (cross-service) and `Src/*/tests/features/` (service-specific)
+- **Step Definitions:** In `conftest.py` files at appropriate levels
+- **Test Markers:** @unit (build-time), @integration (runtime), @slow/@heavy (decoupled)
+
+### Consequences
+- Feature files serve as living documentation
+- Non-technical stakeholders can read specifications
+- Two-phase testing: build-time (mocked) and runtime (real)
+- Step definitions reusable across scenarios
+
+---
+
 **END OF DECISION LOG**
 

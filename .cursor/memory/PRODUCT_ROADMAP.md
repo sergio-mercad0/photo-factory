@@ -18,7 +18,7 @@
 
 ---
 
-## Epic 0: Memory Bank Initialization 🔥 🔄
+## Epic 0: Memory Bank Initialization 🔥 ✅
 
 **Goal:** Create persistent context structure for seamless agent handoffs.
 
@@ -35,18 +35,19 @@
 - [x] Initialize DECISION_LOG.md with 6+ implicit ADRs
 - [x] Write PRODUCT_ROADMAP.md with all Epics
 
-### Workstream 0.3: Agent Protocol Enforcement ⏳
-- [ ] Update `.cursorrules` with Section 9: Memory Bank Protocol
-- [ ] Update `.cursorrules` with Section 10: User Story Testing Protocol
-- [ ] Add startup protocol (print roadmap, await approval)
-- [ ] Add hierarchical todo format rule
+### Workstream 0.3: Agent Protocol Enforcement ✅
+- [x] Update `.cursorrules` with Section 9: Memory Bank Protocol
+- [x] Update `.cursorrules` with Section 10: User Story Testing Protocol
+- [x] Add startup protocol (print roadmap, await approval)
+- [x] Add hierarchical todo format rule
 
-### Workstream 0.4: User Story Testing Framework ⏳
-- [ ] Add pytest-bdd to requirements.txt
-- [ ] Create `tests/conftest.py` (project root)
-- [ ] Create `tests/features/` directory
-- [ ] Create service-specific `tests/features/` directories
-- [ ] Define test markers (@unit, @integration, @slow)
+### Workstream 0.4: User Story Testing Framework ✅
+- [x] Add pytest-bdd to requirements.txt
+- [x] Create `tests/conftest.py` (project root)
+- [x] Create `tests/features/` directory
+- [x] Create service-specific `tests/features/` directories
+- [x] Define test markers (@unit, @integration, @slow)
+- [x] Create sample .feature file template
 
 ---
 

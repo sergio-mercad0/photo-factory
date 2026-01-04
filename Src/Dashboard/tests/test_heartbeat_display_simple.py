@@ -71,3 +71,6 @@ def test_syncthing_102s_should_be_green():
                     assert color == "🟢" in heartbeat_info, f"Expected green emoji in display, got '{heartbeat_info}'"
 
 
+
+
+
