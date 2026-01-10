@@ -14,117 +14,125 @@ class TestColorCodingLogic:
     """Test the color coding logic directly."""
     
     def test_syncthing_109s_should_be_green(self):
-        """Test syncthing at 109s should show green (ratio 0.363 < 1.0)."""
+        """Test syncthing at 109s should show green (109 <= 300)."""
         expected_interval = 300
         seconds_ago = 109
-        ratio = seconds_ago / expected_interval
         
-        assert ratio < 1.0, f"Ratio {ratio} should be < 1.0 for green"
-        assert ratio == pytest.approx(0.363, abs=0.001), f"Ratio should be 0.363, got {ratio}"
+        # Implementation uses seconds_ago <= max_interval for green
+        assert seconds_ago <= expected_interval, f"{seconds_ago}s should be <= {expected_interval}s for green"
     
     def test_syncthing_250s_should_be_green(self):
-        """Test syncthing at 250s should show green (ratio 0.833 < 1.0)."""
+        """Test syncthing at 250s should show green (250 <= 300)."""
         expected_interval = 300
         seconds_ago = 250
-        ratio = seconds_ago / expected_interval
         
-        assert ratio < 1.0, f"Ratio {ratio} should be < 1.0 for green"
-        assert ratio == pytest.approx(0.833, abs=0.001)
+        assert seconds_ago <= expected_interval, f"{seconds_ago}s should be <= {expected_interval}s for green"
     
     def test_syncthing_299s_should_be_green(self):
-        """Test syncthing at 299s should show green (ratio 0.997 < 1.0) - edge case."""
+        """Test syncthing at 299s should show green (299 <= 300) - edge case."""
         expected_interval = 300
         seconds_ago = 299
-        ratio = seconds_ago / expected_interval
         
-        assert ratio < 1.0, f"Ratio {ratio} should be < 1.0 for green"
-        assert ratio == pytest.approx(0.997, abs=0.001)
+        assert seconds_ago <= expected_interval, f"{seconds_ago}s should be <= {expected_interval}s for green"
     
-    def test_syncthing_300s_should_be_yellow(self):
-        """Test syncthing at 300s should show yellow (ratio 1.0) - edge case."""
+    def test_syncthing_300s_should_be_green(self):
+        """Test syncthing at 300s should show green (300 <= 300) - boundary case.
+        
+        Implementation uses <= for green, so exactly at interval is still green.
+        """
         expected_interval = 300
         seconds_ago = 300
-        ratio = seconds_ago / expected_interval
         
-        assert ratio >= 1.0, f"Ratio {ratio} should be >= 1.0 for yellow"
-        assert ratio < 2.0, f"Ratio {ratio} should be < 2.0 for yellow"
-        assert ratio == 1.0
+        # At exactly the interval boundary, implementation shows GREEN
+        assert seconds_ago <= expected_interval, f"{seconds_ago}s should be <= {expected_interval}s for green"
+    
+    def test_syncthing_301s_should_be_yellow(self):
+        """Test syncthing at 301s should show yellow (301 > 300, 301 <= 600)."""
+        expected_interval = 300
+        seconds_ago = 301
+        
+        # Implementation: max_interval < seconds_ago <= max_interval * 2 is yellow
+        assert seconds_ago > expected_interval, f"{seconds_ago}s should be > {expected_interval}s"
+        assert seconds_ago <= expected_interval * 2, f"{seconds_ago}s should be <= {expected_interval * 2}s for yellow"
     
     def test_syncthing_350s_should_be_yellow(self):
-        """Test syncthing at 350s should show yellow (ratio 1.167)."""
+        """Test syncthing at 350s should show yellow (300 < 350 <= 600)."""
         expected_interval = 300
         seconds_ago = 350
-        ratio = seconds_ago / expected_interval
         
-        assert ratio >= 1.0, f"Ratio {ratio} should be >= 1.0 for yellow"
-        assert ratio < 2.0, f"Ratio {ratio} should be < 2.0 for yellow"
-        assert ratio == pytest.approx(1.167, abs=0.001)
+        assert seconds_ago > expected_interval, f"{seconds_ago}s should be > {expected_interval}s"
+        assert seconds_ago <= expected_interval * 2, f"{seconds_ago}s should be <= {expected_interval * 2}s for yellow"
     
     def test_syncthing_450s_should_be_yellow(self):
-        """Test syncthing at 450s should show yellow (ratio 1.5)."""
+        """Test syncthing at 450s should show yellow (300 < 450 <= 600)."""
         expected_interval = 300
         seconds_ago = 450
-        ratio = seconds_ago / expected_interval
         
-        assert ratio >= 1.0, f"Ratio {ratio} should be >= 1.0 for yellow"
-        assert ratio < 2.0, f"Ratio {ratio} should be < 2.0 for yellow"
-        assert ratio == 1.5
+        assert seconds_ago > expected_interval, f"{seconds_ago}s should be > {expected_interval}s"
+        assert seconds_ago <= expected_interval * 2, f"{seconds_ago}s should be <= {expected_interval * 2}s for yellow"
     
-    def test_syncthing_599s_should_be_yellow(self):
-        """Test syncthing at 599s should show yellow (ratio 1.997) - edge case."""
-        expected_interval = 300
-        seconds_ago = 599
-        ratio = seconds_ago / expected_interval
+    def test_syncthing_600s_should_be_yellow(self):
+        """Test syncthing at 600s should show yellow (300 < 600 <= 600) - boundary case.
         
-        assert ratio >= 1.0, f"Ratio {ratio} should be >= 1.0 for yellow"
-        assert ratio < 2.0, f"Ratio {ratio} should be < 2.0 for yellow"
-        assert ratio == pytest.approx(1.997, abs=0.001)
-    
-    def test_syncthing_600s_should_be_red(self):
-        """Test syncthing at 600s should show red (ratio 2.0) - edge case."""
+        Implementation uses <= for yellow boundary, so exactly at 2x interval is still yellow.
+        """
         expected_interval = 300
         seconds_ago = 600
-        ratio = seconds_ago / expected_interval
         
-        assert ratio >= 2.0, f"Ratio {ratio} should be >= 2.0 for red"
-        assert ratio == 2.0
+        assert seconds_ago > expected_interval, f"{seconds_ago}s should be > {expected_interval}s"
+        assert seconds_ago <= expected_interval * 2, f"{seconds_ago}s should be <= {expected_interval * 2}s for yellow"
+    
+    def test_syncthing_601s_should_be_red(self):
+        """Test syncthing at 601s should show red (601 > 600)."""
+        expected_interval = 300
+        seconds_ago = 601
+        
+        # Implementation: seconds_ago > max_interval * 2 is red
+        assert seconds_ago > expected_interval * 2, f"{seconds_ago}s should be > {expected_interval * 2}s for red"
     
     def test_syncthing_900s_should_be_red(self):
-        """Test syncthing at 900s should show red (ratio 3.0)."""
+        """Test syncthing at 900s should show red (900 > 600)."""
         expected_interval = 300
         seconds_ago = 900
-        ratio = seconds_ago / expected_interval
         
-        assert ratio >= 2.0, f"Ratio {ratio} should be >= 2.0 for red"
-        assert ratio == 3.0
+        assert seconds_ago > expected_interval * 2, f"{seconds_ago}s should be > {expected_interval * 2}s for red"
     
     def test_librarian_41s_should_be_green(self):
-        """Test librarian at 41s should show green (ratio 0.683 < 1.0)."""
+        """Test librarian at 41s should show green (41 <= 60)."""
         expected_interval = 60
         seconds_ago = 41
-        ratio = seconds_ago / expected_interval
         
-        assert ratio < 1.0, f"Ratio {ratio} should be < 1.0 for green"
-        assert ratio == pytest.approx(0.683, abs=0.001)
+        assert seconds_ago <= expected_interval, f"{seconds_ago}s should be <= {expected_interval}s for green"
+    
+    def test_librarian_60s_should_be_green(self):
+        """Test librarian at 60s should show green (60 <= 60) - boundary case."""
+        expected_interval = 60
+        seconds_ago = 60
+        
+        assert seconds_ago <= expected_interval, f"{seconds_ago}s should be <= {expected_interval}s for green"
     
     def test_librarian_90s_should_be_yellow(self):
-        """Test librarian at 90s should show yellow (ratio 1.5)."""
+        """Test librarian at 90s should show yellow (60 < 90 <= 120)."""
         expected_interval = 60
         seconds_ago = 90
-        ratio = seconds_ago / expected_interval
         
-        assert ratio >= 1.0, f"Ratio {ratio} should be >= 1.0 for yellow"
-        assert ratio < 2.0, f"Ratio {ratio} should be < 2.0 for yellow"
-        assert ratio == 1.5
+        assert seconds_ago > expected_interval, f"{seconds_ago}s should be > {expected_interval}s"
+        assert seconds_ago <= expected_interval * 2, f"{seconds_ago}s should be <= {expected_interval * 2}s for yellow"
     
-    def test_librarian_120s_should_be_red(self):
-        """Test librarian at 120s should show red (ratio 2.0)."""
+    def test_librarian_120s_should_be_yellow(self):
+        """Test librarian at 120s should show yellow (60 < 120 <= 120) - boundary case."""
         expected_interval = 60
         seconds_ago = 120
-        ratio = seconds_ago / expected_interval
         
-        assert ratio >= 2.0, f"Ratio {ratio} should be >= 2.0 for red"
-        assert ratio == 2.0
+        assert seconds_ago > expected_interval, f"{seconds_ago}s should be > {expected_interval}s"
+        assert seconds_ago <= expected_interval * 2, f"{seconds_ago}s should be <= {expected_interval * 2}s for yellow"
+    
+    def test_librarian_121s_should_be_red(self):
+        """Test librarian at 121s should show red (121 > 120)."""
+        expected_interval = 60
+        seconds_ago = 121
+        
+        assert seconds_ago > expected_interval * 2, f"{seconds_ago}s should be > {expected_interval * 2}s for red"
 
 
 class TestColorCodingDisplay:
@@ -173,19 +181,20 @@ class TestColorCodingDisplay:
                         seconds_ago = int(time_since.total_seconds())
                         ratio = seconds_ago / expected_interval if expected_interval > 0 else 0
                         
-                        # Verify ratio and color
-                        assert ratio < 1.0, f"Ratio {ratio} should be < 1.0 for green"
+                        # Verify color based on implementation logic (uses <=)
                         assert seconds_ago == 109, f"Expected 109s, got {seconds_ago}s"
                         assert expected_interval == 300, f"Expected 300s interval, got {expected_interval}s"
+                        assert seconds_ago <= expected_interval, f"{seconds_ago}s should be <= {expected_interval}s for green"
                         
-                        if ratio < 1.0:
+                        # Match implementation: seconds_ago <= max_interval -> green
+                        if seconds_ago <= expected_interval:
                             color = "🟢"
-                        elif ratio < 2.0:
+                        elif seconds_ago <= expected_interval * 2:
                             color = "🟡"
                         else:
                             color = "🔴"
                         
-                        assert color == "🟢", f"Expected green, got {color} for ratio {ratio}"
+                        assert color == "🟢", f"Expected green, got {color} for {seconds_ago}s"
     
     def test_syncthing_350s_shows_yellow_in_status_data(self):
         """Test that syncthing at 350s shows yellow in status_data table."""
@@ -214,21 +223,26 @@ class TestColorCodingDisplay:
                         
                         time_since = datetime.now() - svc["heartbeat"]["last_heartbeat"]
                         seconds_ago = int(time_since.total_seconds())
-                        ratio = seconds_ago / expected_interval
                         
-                        assert ratio >= 1.0 and ratio < 2.0, f"Ratio {ratio} should be 1.0-2.0 for yellow"
+                        # Implementation uses: max_interval < seconds_ago <= max_interval * 2 for yellow
+                        assert seconds_ago > expected_interval, f"{seconds_ago}s should be > {expected_interval}s"
+                        assert seconds_ago <= expected_interval * 2, f"{seconds_ago}s should be <= {expected_interval * 2}s for yellow"
                         
-                        if ratio < 1.0:
+                        # Match implementation logic
+                        if seconds_ago <= expected_interval:
                             color = "🟢"
-                        elif ratio < 2.0:
+                        elif seconds_ago <= expected_interval * 2:
                             color = "🟡"
                         else:
                             color = "🔴"
                         
-                        assert color == "🟡", f"Expected yellow, got {color} for ratio {ratio}"
+                        assert color == "🟡", f"Expected yellow, got {color} for {seconds_ago}s"
     
-    def test_syncthing_600s_shows_red_in_status_data(self):
-        """Test that syncthing at 600s shows red in status_data table."""
+    def test_syncthing_601s_shows_red_in_status_data(self):
+        """Test that syncthing at 601s shows red in status_data table.
+        
+        Note: 600s would be yellow (600 <= 600), so we use 601s for red.
+        """
         get_all_services_status.clear()
         
         with patch('Src.Dashboard.dashboard.DOCKER_AVAILABLE', True):
@@ -239,9 +253,9 @@ class TestColorCodingDisplay:
                     mock_container.return_value = {"running": True, "health": "healthy"}
                     
                     with patch('Src.Dashboard.dashboard.get_service_heartbeat') as mock_heartbeat:
-                        # Syncthing at 600 seconds (should be red)
+                        # Syncthing at 601 seconds (should be red: 601 > 600)
                         mock_heartbeat.return_value = {
-                            "last_heartbeat": datetime.now() - timedelta(seconds=600),
+                            "last_heartbeat": datetime.now() - timedelta(seconds=601),
                             "status": "OK"
                         }
                         
@@ -254,18 +268,19 @@ class TestColorCodingDisplay:
                         
                         time_since = datetime.now() - svc["heartbeat"]["last_heartbeat"]
                         seconds_ago = int(time_since.total_seconds())
-                        ratio = seconds_ago / expected_interval
                         
-                        assert ratio >= 2.0, f"Ratio {ratio} should be >= 2.0 for red"
+                        # Implementation: seconds_ago > max_interval * 2 is red
+                        assert seconds_ago > expected_interval * 2, f"{seconds_ago}s should be > {expected_interval * 2}s for red"
                         
-                        if ratio < 1.0:
+                        # Match implementation logic
+                        if seconds_ago <= expected_interval:
                             color = "🟢"
-                        elif ratio < 2.0:
+                        elif seconds_ago <= expected_interval * 2:
                             color = "🟡"
                         else:
                             color = "🔴"
                         
-                        assert color == "🔴", f"Expected red, got {color} for ratio {ratio}"
+                        assert color == "🔴", f"Expected red, got {color} for {seconds_ago}s"
     
     def test_service_name_mapping_syncthing(self):
         """Test that container name 'syncthing' correctly maps to service name 'syncthing'."""
@@ -337,26 +352,32 @@ class TestColorCodingEndToEnd:
                         svc = result[0]
                         assert svc["heartbeat"] is not None
                         
-                        # Test the color calculation
+                        # Test the color calculation using implementation logic
                         service_intervals = {"syncthing": 300}
                         service_name_for_interval = svc.get("service_name")
                         expected_interval = service_intervals.get(service_name_for_interval, 300)
                         
                         time_since = datetime.now() - svc["heartbeat"]["last_heartbeat"]
                         seconds_ago = int(time_since.total_seconds())
-                        ratio = seconds_ago / expected_interval
                         
-                        assert ratio < 1.0, f"Ratio {ratio} should be < 1.0 for green (109/300 = 0.363)"
+                        # Implementation uses <= for green boundary
+                        assert seconds_ago <= expected_interval, f"{seconds_ago}s should be <= {expected_interval}s for green"
                         assert seconds_ago == 109, f"Expected 109s, got {seconds_ago}s"
                         
-                        if ratio < 1.0:
+                        # Match implementation logic
+                        if seconds_ago <= expected_interval:
                             color = "🟢"
-                        elif ratio < 2.0:
+                        elif seconds_ago <= expected_interval * 2:
                             color = "🟡"
                         else:
                             color = "🔴"
                         
-                        assert color == "🟢", f"Expected green for 109s (ratio {ratio}), got {color}"
+                        assert color == "🟢", f"Expected green for 109s, got {color}"
+
+
+
+
+
 
 
 

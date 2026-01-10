@@ -1,6 +1,6 @@
 # Decision Log
 
-**Last Updated:** 2026-01-03  
+**Last Updated:** 2026-01-10  
 **Purpose:** Architecture Decision Records (ADRs) for Photo Factory
 
 ---
@@ -374,6 +374,103 @@ Use pytest-bdd (>=7.0.0) for Gherkin-based feature files.
 - Non-technical stakeholders can read specifications
 - Two-phase testing: build-time (mocked) and runtime (real)
 - Step definitions reusable across scenarios
+
+---
+
+## ADR-010: 4-Pillar Cursorrules Structure with RFC-2119
+
+**Date:** 2026-01-04  
+**Status:** Accepted  
+**Author:** Refactoring Session
+
+### Context
+The `.cursorrules` file had grown to 11 flat sections with redundancy (Memory Bank described in both header and Section 9, Testing split across Sections 7 and 10) and inconsistent language (mixing "MANDATORY", "STRICT", "BANNED", lowercase "must").
+
+### Decision
+Restructure into 4 semantic pillars with RFC-2119 language standardization:
+1. **01_AGENT_PROTOCOL** - Memory Bank, Startup, Planning, Closeout, Protected Files
+2. **02_INFRASTRUCTURE** - Project Topography, Pathing, Docker Standards
+3. **03_DEVELOPMENT** - Database Schema, Architecture Decisions, Error Handling, Documentation
+4. **04_QUALITY_ASSURANCE** - Testing Protocol, Two-Phase Strategy, BDD, TDD Workflow
+
+### Rationale
+- **Semantic Grouping:** Reduces cognitive load for LLM by clustering related rules
+- **RFC-2119 Compliance:** Unambiguous requirement language (MUST, MUST NOT, SHOULD, MAY, RECOMMENDED)
+- **Eliminated Redundancy:** Memory Bank now in single location (1.1), Testing unified in Pillar 4
+- **Top-Down Priority:** Agent reads Protocol rules first (most critical for session behavior)
+- **Better Maintainability:** Clear section ownership for future updates
+
+### Alternatives Considered
+| Option | Pros | Cons |
+|--------|------|------|
+| Keep flat 11 sections | Familiar | Redundancy, inconsistent language |
+| 3 pillars | Simpler | Protocol needs its own section |
+| 6+ pillars | More granular | Too fragmented, harder to navigate |
+
+### Key Changes
+| Before | After |
+|--------|-------|
+| "MANDATORY" | **MUST** |
+| "BANNED" / "Never" | **MUST NOT** |
+| "STRICT" | **MUST** |
+| "should" / "prefer" | **SHOULD** |
+| "may" / "optional" | **MAY** |
+| Duplicate Memory Bank | Single definition in 1.1 |
+| Split Testing rules | Unified in 04_QUALITY_ASSURANCE |
+
+### Consequences
+- All rules now use consistent RFC-2119 language
+- Agent Protocol (startup, planning, closeout) is front-loaded
+- Version Control integrated into Session Closeout
+- Mode Switching has explicit trigger: ">2 files or architectural changes"
+- Easier for future agents to parse and follow rules
+
+---
+
+## ADR-011: psutil for System Resource Monitoring
+
+**Date:** 2026-01-10  
+**Status:** Accepted  
+**Author:** Epic 6 WS 6.0
+
+### Context
+Dashboard needs CPU, RAM, and Disk usage metrics displayed in the header bar, similar to Homepage layout. Required a cross-platform library for system resource monitoring.
+
+### Decision
+Use psutil (≥5.9.0) for system resource monitoring in the Dashboard.
+
+### Rationale
+- **Cross-Platform:** Works on Windows, Linux, and macOS without code changes
+- **Lightweight:** Minimal dependencies, fast performance
+- **Industry Standard:** Widely used for Python system monitoring
+- **Clean API:** Simple Python interface for CPU, memory, and disk metrics
+- **Comprehensive:** Provides additional metrics (network, processes) for future use
+
+### Alternatives Considered
+| Option | Pros | Cons |
+|--------|------|------|
+| Docker Stats API | Container metrics available | Only shows container stats, not host system |
+| Custom /proc parsing | No dependencies | Linux-only, complex to maintain |
+| py-cpuinfo | CPU details | CPU only, no RAM/Disk |
+| resource module | Built-in Python | Limited metrics, Unix-only |
+
+### Implementation
+```python
+import psutil
+
+def get_system_resources():
+    return {
+        "cpu_percent": psutil.cpu_percent(interval=None),
+        "ram_percent": psutil.virtual_memory().percent,
+        "disk_percent": psutil.disk_usage('/').percent,
+    }
+```
+
+### Consequences
+- Dashboard can display host system metrics (not just container stats)
+- Same library can be extended for future monitoring features
+- Works identically in Docker and local development
+- Minimal impact on dashboard refresh performance
 
 ---
 

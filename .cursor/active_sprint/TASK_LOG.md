@@ -139,4 +139,111 @@ None
 
 ---
 
+## 2026-01-10 - Epic 6 WS 6.0 Test Review & Roadmap Update
+
+### Session Goal
+Review test-related tasks from Epic 6 WS 6.0 (Flicker-Free Resource Monitoring) to ensure tests accurately reflect the working codebase, then update PRODUCT_ROADMAP.md.
+
+### Tasks Completed
+
+#### [Epic 6 > WS 6.0] Test Review ✅
+
+**Issue Found:** Boundary condition mismatch between tests and implementation
+- **Implementation** uses `seconds_ago <= max_interval` (inclusive) for green
+- **Tests** were using `ratio < 1.0` (exclusive) for green
+- At exactly the interval boundary (e.g., 300s for syncthing), implementation shows GREEN but tests expected YELLOW
+
+**Files Updated:**
+1. `Src/Dashboard/tests/test_dashboard_color_coding.py`
+   - Updated TestColorCodingLogic class to use `<=` boundary conditions
+   - Changed `test_syncthing_300s_should_be_yellow` → `test_syncthing_300s_should_be_green`
+   - Changed `test_syncthing_600s_should_be_red` → `test_syncthing_600s_should_be_yellow`
+   - Added new tests: `test_syncthing_301s_should_be_yellow`, `test_syncthing_601s_should_be_red`
+   - Added `test_librarian_60s_should_be_green`, `test_librarian_120s_should_be_yellow`, `test_librarian_121s_should_be_red`
+   - Updated TestColorCodingDisplay class to match implementation logic
+   - Updated TestColorCodingEndToEnd class to match implementation logic
+
+2. `Src/Dashboard/tests/test_heartbeat_display_simple.py`
+   - Updated color logic to use `<=` instead of `<`
+
+3. `Src/Dashboard/tests/test_dashboard_heartbeat_display.py`
+   - Renamed tests to reflect boundary conditions
+   - Added `test_heartbeat_color_green_at_exact_boundary` test
+   - Added `test_heartbeat_color_yellow_at_2x_boundary` test
+   - Updated `test_different_services_have_different_intervals` to use `<=` logic
+
+#### [Epic 6 > WS 6.0] Roadmap Update ✅ (Protected File - Approved)
+
+**Changes to PRODUCT_ROADMAP.md:**
+- Updated Epic 6 status: `Not Started` → `In Progress`
+- Updated Epic 6 priority: `Low` → `Medium`
+- Added new Workstream 6.0: Flicker-Free Resource Monitoring (Completed)
+- Updated Last Updated date to 2026-01-10
+
+### Verification
+- [x] All test files updated with correct boundary logic
+- [x] No linting errors in modified files
+- [x] PRODUCT_ROADMAP.md updated with user approval
+
+### Notes
+- The implementation's `<=` boundary is more correct semantically: a heartbeat exactly at its expected interval is "on time" and should be green
+- All 3 places in dashboard.py that implement color logic use consistent `<=` boundaries (lines 577-582, 629-634, 730-735)
+
+---
+
+## 2026-01-10 - Epic 6 WS 6.0 Docker Validation
+
+### Session Goal
+Complete Docker validation for Workstream 6.0 (Flicker-Free Resource Monitoring).
+
+### Tasks Completed
+
+#### [Epic 6 > WS 6.0] Docker Validation ✅ (e6-ws6.0.11-validate)
+
+**Build Gate (pytest):**
+- Command: `docker-compose build dashboard`
+- Result: **SUCCESS**
+- Tests: 82 passed, 4 skipped, 3 warnings in 0.66s
+- All resource function tests passed (`test_dashboard_resources.py`)
+- All heartbeat display tests passed
+- All color coding tests passed with corrected boundary conditions
+
+**Container Start:**
+- Command: `docker-compose up -d dashboard`
+- Result: **SUCCESS**
+- Container created and started successfully
+- Waited for factory-db health check before starting
+
+**Health Check:**
+- Command: `docker-compose ps dashboard`
+- Result: **Container healthy**
+- Status: `Up 11 seconds (healthy)`
+- Port binding: `0.0.0.0:8501->8501/tcp`
+
+**Browser Test:**
+- URL: `http://localhost:8501/`
+- Page title confirmed: "Photo Factory Dashboard"
+- Auto-refresh working (confirmed via container logs)
+- No critical console errors (only standard Streamlit framework warnings)
+
+### Verification Checklist
+- [x] File edits verified via terminal
+- [x] Tests pass: 82 passed, 4 skipped
+- [x] Docker build: SUCCESS (multi-stage build with test gate)
+- [x] Container start: SUCCESS (healthy status)
+- [x] Browser test: Dashboard accessible and functional
+- [x] No test artifacts to clean up
+
+### Known Issues
+- Deprecation warnings for `use_container_width` parameter (informational, Streamlit API change)
+- Screenshot capture unavailable via browser tools (MCP limitation, not affecting functionality)
+
+### Next Agent Notes
+- Workstream 6.0 is now fully validated and complete
+- Dashboard shows CPU/RAM/Disk metrics in header row
+- Container-based architecture with `st.empty()` eliminates flicker
+- CSS transitions provide smooth visual updates
+
+---
+
 **END OF TASK LOG**

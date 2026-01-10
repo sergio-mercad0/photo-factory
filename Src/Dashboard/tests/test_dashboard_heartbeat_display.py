@@ -64,33 +64,49 @@ class TestHeartbeatDisplayFormat:
                         assert result[0]["heartbeat"] is not None
     
     def test_heartbeat_color_green_when_within_interval(self):
-        """Test that heartbeat shows green when ratio < 1.0."""
-        # This test verifies the logic, actual display is in the UI
+        """Test that heartbeat shows green when seconds_ago <= max_interval.
+        
+        Implementation uses <= for green boundary, so exactly at interval is still green.
+        """
         expected_interval = 60
         seconds_ago = 41
-        ratio = seconds_ago / expected_interval
         
-        assert ratio < 1.0, "Should be green (ratio < 1.0)"
-        assert ratio == 41/60, "Ratio should be 41/60"
+        # Implementation: seconds_ago <= max_interval -> green
+        assert seconds_ago <= expected_interval, f"{seconds_ago}s should be <= {expected_interval}s for green"
     
-    def test_heartbeat_color_yellow_when_1x_to_2x_interval(self):
-        """Test that heartbeat shows yellow when ratio 1.0-2.0."""
+    def test_heartbeat_color_green_at_exact_boundary(self):
+        """Test that heartbeat shows green at exactly the interval (boundary case)."""
+        expected_interval = 60
+        seconds_ago = 60  # Exactly at interval
+        
+        # Implementation uses <=, so this should be GREEN
+        assert seconds_ago <= expected_interval, f"{seconds_ago}s should be <= {expected_interval}s for green"
+    
+    def test_heartbeat_color_yellow_when_over_1x_up_to_2x_interval(self):
+        """Test that heartbeat shows yellow when max_interval < seconds_ago <= max_interval * 2."""
         expected_interval = 60
         seconds_ago = 90  # 1.5x the interval
-        ratio = seconds_ago / expected_interval
         
-        assert ratio >= 1.0, "Should be yellow (ratio >= 1.0)"
-        assert ratio < 2.0, "Should be yellow (ratio < 2.0)"
-        assert ratio == 1.5, "Ratio should be 1.5"
+        # Implementation: max_interval < seconds_ago <= max_interval * 2 -> yellow
+        assert seconds_ago > expected_interval, f"{seconds_ago}s should be > {expected_interval}s"
+        assert seconds_ago <= expected_interval * 2, f"{seconds_ago}s should be <= {expected_interval * 2}s for yellow"
+    
+    def test_heartbeat_color_yellow_at_2x_boundary(self):
+        """Test that heartbeat shows yellow at exactly 2x interval (boundary case)."""
+        expected_interval = 60
+        seconds_ago = 120  # Exactly 2x the interval
+        
+        # Implementation uses <=, so 2x interval is still YELLOW
+        assert seconds_ago > expected_interval, f"{seconds_ago}s should be > {expected_interval}s"
+        assert seconds_ago <= expected_interval * 2, f"{seconds_ago}s should be <= {expected_interval * 2}s for yellow"
     
     def test_heartbeat_color_red_when_over_2x_interval(self):
-        """Test that heartbeat shows red when ratio >= 2.0."""
+        """Test that heartbeat shows red when seconds_ago > max_interval * 2."""
         expected_interval = 60
-        seconds_ago = 120  # 2x the interval
-        ratio = seconds_ago / expected_interval
+        seconds_ago = 121  # Just over 2x the interval
         
-        assert ratio >= 2.0, "Should be red (ratio >= 2.0)"
-        assert ratio == 2.0, "Ratio should be 2.0"
+        # Implementation: seconds_ago > max_interval * 2 -> red
+        assert seconds_ago > expected_interval * 2, f"{seconds_ago}s should be > {expected_interval * 2}s for red"
     
     def test_different_services_have_different_intervals(self):
         """Test that different services use their correct expected intervals."""
@@ -101,19 +117,20 @@ class TestHeartbeatDisplayFormat:
             "syncthing": 300,
         }
         
-        # Librarian at 50s should be green (50/60 < 1.0)
-        librarian_ratio = 50 / service_intervals["librarian"]
-        assert librarian_ratio < 1.0
+        # Librarian at 50s should be green (50 <= 60)
+        assert 50 <= service_intervals["librarian"], "Librarian at 50s should be green"
         
-        # Syncthing at 250s should be green (250/300 < 1.0)
-        syncthing_ratio = 250 / service_intervals["syncthing"]
-        assert syncthing_ratio < 1.0
+        # Syncthing at 250s should be green (250 <= 300)
+        assert 250 <= service_intervals["syncthing"], "Syncthing at 250s should be green"
         
-        # Librarian at 90s should be yellow (90/60 = 1.5)
-        librarian_ratio_yellow = 90 / service_intervals["librarian"]
-        assert 1.0 <= librarian_ratio_yellow < 2.0
+        # Librarian at 60s should be green (60 <= 60) - boundary
+        assert 60 <= service_intervals["librarian"], "Librarian at exactly 60s should be green"
         
-        # Syncthing at 450s should be yellow (450/300 = 1.5)
-        syncthing_ratio_yellow = 450 / service_intervals["syncthing"]
-        assert 1.0 <= syncthing_ratio_yellow < 2.0
+        # Librarian at 90s should be yellow (60 < 90 <= 120)
+        assert 90 > service_intervals["librarian"], "Librarian at 90s exceeds interval"
+        assert 90 <= service_intervals["librarian"] * 2, "Librarian at 90s should be yellow"
+        
+        # Syncthing at 450s should be yellow (300 < 450 <= 600)
+        assert 450 > service_intervals["syncthing"], "Syncthing at 450s exceeds interval"
+        assert 450 <= service_intervals["syncthing"] * 2, "Syncthing at 450s should be yellow"
 

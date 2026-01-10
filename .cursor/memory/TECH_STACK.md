@@ -1,6 +1,6 @@
 # Tech Stack
 
-**Last Updated:** 2026-01-03  
+**Last Updated:** 2026-01-10  
 **Purpose:** Technology choices for Photo Factory
 
 ---
@@ -63,6 +63,7 @@ Base Image: `python:3.11-slim-bookworm`
 | **pandas** | ≥2.0.0 | Data manipulation for dashboard |
 | **streamlit-autorefresh** | ≥0.0.6 | Auto-refresh component |
 | **docker** | ≥6.1.0 | Docker API for container status |
+| **psutil** | ≥5.9.0 | System resource monitoring (CPU, RAM, Disk) |
 
 ### Testing
 | Package | Version | Purpose |
@@ -142,4 +143,9 @@ Configured via Docker `deploy.resources.reservations.devices`.
 ---
 
 **END OF TECH STACK**
+
+
+
+
+
 

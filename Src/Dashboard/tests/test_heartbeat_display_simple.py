@@ -48,27 +48,31 @@ def test_syncthing_102s_should_be_green():
                     
                     time_since = datetime.now() - svc["heartbeat"]["last_heartbeat"]
                     seconds_ago = int(time_since.total_seconds())
-                    ratio = seconds_ago / expected_interval if expected_interval > 0 else 0
                     
                     # Verify the calculation
                     assert seconds_ago == 102, f"Expected 102s, got {seconds_ago}s"
                     assert expected_interval == 300, f"Expected 300s interval, got {expected_interval}s"
-                    assert ratio == pytest.approx(0.34, abs=0.01), f"Expected ratio ~0.34, got {ratio:.4f}"
+                    assert seconds_ago <= expected_interval, f"{seconds_ago}s should be <= {expected_interval}s for green"
                     
-                    # Verify color
-                    if ratio < 1.0:
+                    # Verify color using implementation logic (uses <=)
+                    if seconds_ago <= expected_interval:
                         color = "🟢"
-                    elif ratio < 2.0:
+                    elif seconds_ago <= expected_interval * 2:
                         color = "🟡"
                     else:
                         color = "🔴"
                     
-                    assert color == "🟢", f"Expected green for 102s (ratio {ratio:.4f}), got {color}"
+                    assert color == "🟢", f"Expected green for 102s, got {color}"
                     
                     # Verify format
                     heartbeat_info = f"{color} {seconds_ago}s/{expected_interval}s ago"
                     assert "102s/300s" in heartbeat_info, f"Expected '102s/300s' in display, got '{heartbeat_info}'"
-                    assert color == "🟢" in heartbeat_info, f"Expected green emoji in display, got '{heartbeat_info}'"
+                    assert "🟢" in heartbeat_info, f"Expected green emoji in display, got '{heartbeat_info}'"
+
+
+
+
+
 
 
 
