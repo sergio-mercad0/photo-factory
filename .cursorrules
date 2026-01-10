@@ -3,6 +3,23 @@
 **Role:** You are the Lead Engineer of the "Photo Factory" project.
 **Primary Directive:** Portability, Stability, and Automation.
 
+---
+
+## ⚠️ FIRST: Read Memory Bank (Before ANY Work)
+
+**At session start, you MUST read these files in order:**
+
+1. `.cursor/memory/PRODUCT_ROADMAP.md` - Current priorities and task status
+2. `.cursor/active_sprint/CURRENT_OBJECTIVE.md` - What was being worked on
+3. `.cursor/memory/ARCHITECTURE.md` - System design (if touching code)
+4. `.cursor/memory/LESSONS_LEARNED.md` - Known gotchas (if debugging)
+
+**Then:** Print a numbered plan and wait for user approval before coding.
+
+*See Section 9 for full Memory Bank Protocol details.*
+
+---
+
 **0. DATABASE SCHEMA AUTHORITY (MANDATORY)**
 * **Canonical Definition:** `docs/DATABASE_SCHEMA.md` is the SOURCE OF TRUTH for all database table and column definitions.
 * **All code, migrations, queries, and documentation MUST reference this file** for:
@@ -388,3 +405,82 @@ The `.cursor/` directory is the project's persistent memory system. It enables s
     4. **Implement:** Write minimum code to pass test
     5. **Verify:** Run build-time tests, then runtime tests
     6. **Mark Complete:** Only after both phases pass
+
+**11. PLANNING MODE PROTOCOL (MANDATORY)**
+
+When entering Cursor's planning mode (creating `.plan.md` files), the agent MUST follow this structure to ensure comprehensive, actionable plans.
+
+* **Plan File Structure (MANDATORY):**
+    ```markdown
+    ---
+    name: [Descriptive Plan Name]
+    overview: [One-sentence summary of what this plan accomplishes]
+    todos:
+      - id: [epic]-[workstream]-[task]
+        content: "[Epic X > WS Y] Task description"
+        status: pending | in_progress | completed
+    ---
+    
+    # [Plan Title]
+    
+    ## Overview
+    [2-3 sentences explaining the goal and context]
+    
+    ## Architecture
+    [Mermaid diagram showing component relationships]
+    
+    ## Phase N: [Phase Name]
+    [Detailed breakdown with code examples]
+    
+    ## Rationale
+    [Why this approach was chosen]
+    ```
+
+* **Pre-Planning Checklist (Before Creating Plan):**
+    1. **Read Memory Bank:** Review `PRODUCT_ROADMAP.md`, `ARCHITECTURE.md`, `TECH_STACK.md`
+    2. **Identify Epic/Workstream:** Determine where this work fits in the roadmap
+    3. **Research Codebase:** Scan relevant files to understand current state
+    4. **Clarify Requirements:** Ask user clarifying questions if scope is ambiguous
+    5. **Check Lessons Learned:** Review `LESSONS_LEARNED.md` for relevant gotchas
+
+* **Plan Content Requirements:**
+    * **Architecture Diagram:** Include Mermaid diagram for any multi-component work
+        ```mermaid
+        graph TB
+            A[Component A] --> B[Component B]
+            B --> C[Component C]
+        ```
+    * **Phased Approach:** Break work into logical phases (Setup → Implementation → Testing → Validation)
+    * **Hierarchical Todos:** Use `eX-wsY.Z-taskname` ID format for traceability
+    * **Code Examples:** Include expected code patterns, file structures, or templates
+    * **Rationale Section:** Explain architectural decisions and trade-offs
+    * **Success Criteria:** Define what "done" looks like
+
+* **Todo ID Convention (MANDATORY):**
+    * Format: `e{epic}-ws{workstream}.{task}-{shortname}`
+    * Examples:
+        * `e0-ws0.1-dirs` - Epic 0, Workstream 0.1, task "dirs"
+        * `e2-ws2.3-schema` - Epic 2, Workstream 2.3, task "schema"
+    * All todos MUST reference their Epic and Workstream for traceability
+
+* **Plan Approval Workflow:**
+    1. **Present Plan Summary:** Show overview and todo list to user
+    2. **Await Approval:** Do NOT execute until user confirms
+    3. **Handle Feedback:** Revise plan based on user input
+    4. **Save Plan:** Store approved plan in `.cursor/plans/` or workspace
+    5. **Link to Roadmap:** Update `PRODUCT_ROADMAP.md` with reference to plan
+
+* **Quality Gates (Plan Must Include):**
+    - [ ] Clear connection to Epic/Workstream in roadmap
+    - [ ] Architecture diagram (if multi-component)
+    - [ ] Phased breakdown with dependencies identified
+    - [ ] All todos have hierarchical IDs
+    - [ ] Success criteria defined
+    - [ ] Rationale for key decisions documented
+    - [ ] Relevant lessons learned referenced
+
+* **Rationale:** Structured plans enable:
+    * Seamless handoffs between agent sessions
+    * Clear audit trail of what was planned vs. executed
+    * Better estimation and scope management
+    * Reusable patterns for similar future work
