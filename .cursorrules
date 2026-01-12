@@ -160,6 +160,7 @@ todos:
 - [ ] Success criteria defined
 - [ ] Rationale for key decisions documented
 - [ ] Relevant lessons learned referenced
+- [ ] Git commit task included at workstream completion
 
 ### Incremental Build Gates (MUST Follow)
 
@@ -171,6 +172,7 @@ todos:
 | Implementation complete | `pytest <module>/tests/ -v` - verify unit tests pass locally |
 | Docker changes | `docker-compose build <service>` - verify image builds |
 | Full feature complete | Full Docker validation (build → start → health → functionality) |
+| Workstream/Feature complete | `git add . && git commit -m "type: summary" && git push` - persist all changes to version control |
 
 **Task Granularity Guidance:**
 * **Bundle related work:** "Add function" + "Add tests for function" should be ONE task, not two
