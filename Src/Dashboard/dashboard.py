@@ -7,7 +7,9 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 import docker
+import psutil
 import streamlit as st
+import streamlit.components.v1 as components
 from sqlalchemy import func
 from streamlit_autorefresh import st_autorefresh
 
@@ -61,6 +63,58 @@ def get_container_status(container_name: str) -> Optional[dict]:
     except Exception as e:
         logger.error(f"Error getting container status: {e}")
         return None
+
+
+@st.cache_data(ttl=2)  # Cache for 2 seconds for responsive resource display
+def get_system_resources() -> dict:
+    """
+    Get CPU, RAM, and Disk usage for header display.
+    
+    Returns:
+        Dictionary with system resource metrics:
+        - cpu_percent: Current CPU usage percentage
+        - ram_percent: Current RAM usage percentage
+        - ram_used_gb: RAM used in GB
+        - ram_total_gb: Total RAM in GB
+        - disk_percent: Current disk usage percentage
+        - disk_used_gb: Disk used in GB
+        - disk_total_gb: Total disk in GB
+    """
+    try:
+        # CPU percentage (interval=None uses cached value from last call)
+        cpu_percent = psutil.cpu_percent(interval=None)
+        
+        # Memory/RAM info
+        memory = psutil.virtual_memory()
+        
+        # Disk usage - use root path
+        # On Windows, this will be C:\ by default, on Linux/Mac it's /
+        try:
+            disk = psutil.disk_usage('/')
+        except Exception:
+            # Fallback for Windows if / doesn't work
+            disk = psutil.disk_usage('C:\\')
+        
+        return {
+            "cpu_percent": cpu_percent,
+            "ram_percent": memory.percent,
+            "ram_used_gb": memory.used / (1024**3),
+            "ram_total_gb": memory.total / (1024**3),
+            "disk_percent": disk.percent,
+            "disk_used_gb": disk.used / (1024**3),
+            "disk_total_gb": disk.total / (1024**3),
+        }
+    except Exception as e:
+        logger.error(f"Error getting system resources: {e}")
+        return {
+            "cpu_percent": 0.0,
+            "ram_percent": 0.0,
+            "ram_used_gb": 0.0,
+            "ram_total_gb": 0.0,
+            "disk_percent": 0.0,
+            "disk_used_gb": 0.0,
+            "disk_total_gb": 0.0,
+        }
 
 
 @st.cache_data(ttl=5)  # Cache for 5 seconds to reduce DB load
@@ -401,58 +455,604 @@ def _init_heartbeat():
                 return None
         return _heartbeat_service_instance
 
+def render_resource_header() -> str:
+    """
+    Render CPU/RAM/Disk metrics + service selector in one row.
+    
+    Returns:
+        Selected service name from the selector
+    """
+    resources = get_system_resources()
+    available_services = get_available_services()
+    
+    # Layout: [CPU] [RAM] [Disk] [------Selector------]
+    col_cpu, col_ram, col_disk, col_selector = st.columns([1, 1.5, 1.5, 3])
+    
+    with col_cpu:
+        st.metric("CPU", f"{resources['cpu_percent']:.0f}%")
+    
+    with col_ram:
+        st.metric(
+            "RAM", 
+            f"{resources['ram_percent']:.0f}%",
+            f"{resources['ram_used_gb']:.1f}/{resources['ram_total_gb']:.1f} GB"
+        )
+    
+    with col_disk:
+        st.metric(
+            "Disk",
+            f"{resources['disk_percent']:.0f}%", 
+            f"{resources['disk_used_gb']:.0f}/{resources['disk_total_gb']:.0f} GB"
+        )
+    
+    with col_selector:
+        if available_services:
+            service_options = ["All Services"] + available_services
+            selected_service = st.selectbox(
+                "🔍 **Select Service:**",
+                options=service_options,
+                index=0,
+                key="service_selector"
+            )
+        else:
+            selected_service = "All Services"
+            st.warning("No services available")
+    
+    return selected_service
+
+
+def render_system_overview(db_connected: bool):
+    """Render system overview section."""
+    st.subheader("System Overview")
+    
+    # Infrastructure status
+    infra_col1, infra_col2 = st.columns(2)
+    with infra_col1:
+        db_status = "🟢 Connected" if db_connected else "🔴 Disconnected"
+        st.write(f"**Database:** {db_status}")
+    
+    with infra_col2:
+        docker_status = "🟢 Available" if DOCKER_AVAILABLE else "🔴 Unavailable"
+        st.write(f"**Docker:** {docker_status}")
+
+
+def render_all_services_status():
+    """Render all services status table."""
+    st.subheader("All Services Status")
+    
+    # Always use fresh data - caching handles performance
+    services_status = get_all_services_status()
+    
+    if services_status:
+        # Create a table of all services
+        try:
+            import pandas as pd
+        except ImportError:
+            st.error("pandas not available")
+            return
+        
+        status_data = []
+        for svc in services_status:
+            # Determine status indicator
+            if svc["container_running"]:
+                if svc["container_health"] == "healthy":
+                    status_indicator = "🟢 Healthy"
+                elif svc["container_health"] == "unhealthy":
+                    status_indicator = "🔴 Unhealthy"
+                else:
+                    status_indicator = f"🟡 {svc['container_health']}"
+            else:
+                status_indicator = "🔴 Not Running"
+            
+            # Heartbeat info - always calculate fresh from current time
+            # Format: <elapsed_time>s/<max_interval>s (e.g., 231s/300s or 56s/60s)
+            heartbeat_info = "N/A"
+            if svc["heartbeat"]:
+                # Map service names to their max expected intervals (in seconds)
+                service_max_intervals = {
+                    "librarian": 60,      # Updates every 60 seconds
+                    "dashboard": 300,     # Updates every 5 minutes
+                    "factory-db": 300,    # Monitored every 5 minutes
+                    "syncthing": 300,     # Monitored every 5 minutes
+                }
+                
+                # Get service name for interval lookup
+                service_name = svc.get("service_name")
+                container_name = svc["name"]
+                
+                # Determine max interval based on service name
+                if service_name and service_name in service_max_intervals:
+                    max_interval = service_max_intervals[service_name]
+                elif container_name == "factory_postgres":
+                    max_interval = 300  # factory-db
+                else:
+                    max_interval = 300  # Default to 5 minutes
+                
+                time_since = datetime.now() - svc["heartbeat"]["last_heartbeat"]
+                seconds_ago = int(time_since.total_seconds())
+                
+                # Color logic relative to max_interval:
+                # - <= max_interval: green (within expected interval)
+                # - <= max_interval * 2: yellow (late but not critical)
+                # - > max_interval * 2: red (very late, critical)
+                if seconds_ago <= max_interval:
+                    color = "🟢"
+                elif seconds_ago <= max_interval * 2:
+                    color = "🟡"
+                else:
+                    color = "🔴"
+                
+                # Format: "231s/300s ago" or "56s/60s ago"
+                heartbeat_info = f"{color} {seconds_ago}s/{max_interval}s ago"
+            
+            status_data.append({
+                "Service": svc["name"],
+                "Status": status_indicator,
+                "Heartbeat": heartbeat_info,
+                "Current Task": svc["heartbeat"].get("current_task", "N/A") if svc["heartbeat"] else "N/A",
+            })
+        
+        df = pd.DataFrame(status_data)
+        st.dataframe(df, use_container_width=True, hide_index=True)
+    else:
+        st.info("No services found or Docker unavailable")
+
+
+def render_overall_statistics():
+    """Render overall statistics section."""
+    st.subheader("Overall Statistics")
+    col1, col2, col3, col4 = st.columns(4)
+    
+    # Always get fresh data - caching handles performance
+    total_assets = get_total_assets()
+    assets_last_hour = get_assets_last_hour()
+    heartbeat = get_librarian_heartbeat()
+    
+    with col1:
+        st.metric("Total Assets Secured", f"{total_assets:,}")
+    
+    with col2:
+        st.metric("Processed Last Hour", f"{assets_last_hour:,}")
+    
+    with col3:
+        remaining = get_remaining_files()
+        if remaining is not None:
+            st.metric("Remaining in Inbox", f"{remaining:,}")
+        else:
+            st.metric("Remaining in Inbox", "N/A")
+    
+    with col4:
+        if heartbeat:
+            max_interval = 60  # Librarian updates every 60 seconds
+            time_since = datetime.now() - heartbeat["last_heartbeat"]
+            seconds_ago = int(time_since.total_seconds())
+            # Color logic relative to max_interval
+            if seconds_ago <= max_interval:
+                st.metric("Librarian Heartbeat", f"🟢 {seconds_ago}s/{max_interval}s ago")
+            elif seconds_ago <= max_interval * 2:
+                st.metric("Librarian Heartbeat", f"🟡 {seconds_ago}s/{max_interval}s ago")
+            else:
+                st.metric("Librarian Heartbeat", f"🔴 {seconds_ago}s/{max_interval}s ago")
+        else:
+            st.metric("Librarian Heartbeat", "N/A")
+
+
+def render_latest_files():
+    """Render latest processed files section."""
+    st.subheader("📁 Latest Processed Files")
+    recent_assets = get_recent_assets(limit=10)
+    
+    if recent_assets:
+        try:
+            import pandas as pd
+        except ImportError:
+            st.error("pandas not available")
+            return
+        
+        data = []
+        for asset in recent_assets:
+            data.append({
+                "File": asset.get("original_name", "Unknown"),
+                "Size": f"{asset.get('size_bytes', 0) / 1024 / 1024:.2f} MB",
+                "Captured": asset.get("captured_at").strftime("%Y-%m-%d %H:%M") if asset.get("captured_at") else "N/A",
+                "Ingested": asset.get("ingested_at").strftime("%Y-%m-%d %H:%M:%S") if asset.get("ingested_at") else "N/A",
+                "Path": asset.get("final_path", "N/A")[:50] + "..." if len(asset.get("final_path", "")) > 50 else asset.get("final_path", "N/A"),
+            })
+        
+        df = pd.DataFrame(data)
+        st.dataframe(df, use_container_width=True, hide_index=True)
+    else:
+        st.info("No files processed yet")
+
+
+def render_all_logs(available_services: list):
+    """Render all services logs section."""
+    st.subheader("📋 All Services Logs")
+    if DOCKER_AVAILABLE and available_services:
+        all_logs = get_all_logs(available_services, tail=50)
+        if all_logs:
+            log_lines = [line for line in all_logs.split('\n') if line.strip()]
+            recent_logs = '\n'.join(log_lines[-100:])
+            st.code(recent_logs, language=None)
+        else:
+            st.info("No logs available")
+    else:
+        st.warning("Docker unavailable - cannot fetch logs")
+
+
+def render_service_details(selected_service: str):
+    """Render service-specific details."""
+    service_display_name = selected_service.replace("_", " ").replace("-", " ").title()
+    st.subheader(f"📊 {service_display_name} Service Details")
+    
+    # Service Status
+    container_status = get_container_status(selected_service)
+    status_col1, status_col2 = st.columns(2)
+    
+    with status_col1:
+        if container_status:
+            if container_status["running"]:
+                health = container_status.get("health", "unknown")
+                if health == "healthy":
+                    st.success(f"🟢 Status: Running (Healthy)")
+                elif health == "unhealthy":
+                    st.error(f"🔴 Status: Running (Unhealthy)")
+                else:
+                    st.info(f"🟡 Status: Running ({health})")
+            else:
+                st.error(f"🔴 Status: {container_status['status']}")
+        else:
+            st.warning("⚠️ Status unavailable")
+    
+    with status_col2:
+        # Get heartbeat if available
+        service_name_for_heartbeat = selected_service.split("_")[0] if "_" in selected_service else selected_service
+        # Map container names to service names
+        if selected_service == "factory_postgres":
+            service_name_for_heartbeat = "factory-db"
+        elif selected_service == "syncthing":
+            service_name_for_heartbeat = "syncthing"  # Explicit mapping for syncthing
+        
+        heartbeat = get_service_heartbeat(service_name_for_heartbeat)
+        
+        # Map service names to their max expected intervals (in seconds)
+        service_max_intervals = {
+            "librarian": 60,      # Updates every 60 seconds
+            "dashboard": 300,     # Updates every 5 minutes
+            "factory-db": 300,    # Monitored every 5 minutes
+            "syncthing": 300,     # Monitored every 5 minutes
+        }
+        
+        if heartbeat:
+            max_interval = service_max_intervals.get(service_name_for_heartbeat, 300)  # Default to 5 minutes
+            time_since = datetime.now() - heartbeat["last_heartbeat"]
+            seconds_ago = int(time_since.total_seconds())
+            # Color logic relative to max_interval
+            if seconds_ago <= max_interval:
+                st.success(f"💓 Heartbeat: {seconds_ago}s/{max_interval}s ago")
+            elif seconds_ago <= max_interval * 2:
+                st.warning(f"💓 Heartbeat: {seconds_ago}s/{max_interval}s ago")
+            else:
+                st.error(f"💓 Heartbeat: {seconds_ago}s/{max_interval}s ago")
+            
+            if heartbeat.get("current_task"):
+                st.caption(f"Current Task: {heartbeat['current_task']}")
+        else:
+            st.info("No heartbeat data available")
+    
+    st.markdown("---")
+    
+    # Service-specific metrics
+    if "librarian" in selected_service.lower():
+        # Librarian-specific data
+        st.subheader("📈 Librarian Metrics")
+        metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
+        
+        with metric_col1:
+            st.metric("Total Assets Processed", f"{get_total_assets():,}")
+        
+        with metric_col2:
+            st.metric("Processed Last Hour", f"{get_assets_last_hour():,}")
+        
+        with metric_col3:
+            queue_length = get_librarian_queue_length()
+            if queue_length is not None:
+                st.metric("Queue Length", f"{queue_length:,}")
+            else:
+                st.metric("Queue Length", "N/A")
+                st.caption("Not available")
+        
+        with metric_col4:
+            remaining = get_remaining_files()
+            if remaining is not None:
+                st.metric("Files in Inbox", f"{remaining:,}")
+            else:
+                st.metric("Files in Inbox", "N/A")
+                st.caption("Not available")
+        
+        st.markdown("---")
+        
+        # Latest Processed Files by Librarian
+        st.subheader("📁 Latest Processed Files")
+        recent_assets = get_recent_assets(limit=20)
+        
+        if recent_assets:
+            try:
+                import pandas as pd
+            except ImportError:
+                st.error("pandas not available")
+                return
+            
+            data = []
+            for asset in recent_assets:
+                data.append({
+                    "File": asset.get("original_name", "Unknown"),
+                    "Size": f"{asset.get('size_bytes', 0) / 1024 / 1024:.2f} MB",
+                    "Captured": asset.get("captured_at").strftime("%Y-%m-%d %H:%M") if asset.get("captured_at") else "N/A",
+                    "Ingested": asset.get("ingested_at").strftime("%Y-%m-%d %H:%M:%S") if asset.get("ingested_at") else "N/A",
+                    "Path": asset.get("final_path", "N/A")[:50] + "..." if len(asset.get("final_path", "")) > 50 else asset.get("final_path", "N/A"),
+                })
+            
+            df = pd.DataFrame(data)
+            st.dataframe(df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No files processed yet")
+    
+    st.markdown("---")
+    
+    # Service Logs
+    st.subheader(f"📋 {service_display_name} Logs")
+    if DOCKER_AVAILABLE:
+        logs = get_service_logs(selected_service, tail=200)
+        if logs:
+            log_lines = logs.strip().split('\n')
+            recent_logs = '\n'.join(log_lines[-100:])  # Show last 100 lines
+            st.code(recent_logs, language=None)
+        else:
+            st.info(f"No logs available for {selected_service}")
+    else:
+        st.warning("Docker unavailable - cannot fetch logs")
+
+
 def main():
     """Main dashboard function."""
     # Initialize heartbeat on first run (cached by @st.cache_resource)
     heartbeat_service = _init_heartbeat()
     if heartbeat_service is None:
         logger.warning("Dashboard heartbeat service failed to initialize")
-    # Set page title and add CSS to reduce visual flash
+    
+    # Add CSS for smooth transitions
     st.markdown(
         """
-        <script>
-        document.title = "Photo Factory Dashboard";
-        </script>
         <style>
-        /* Reduce visual flash during refresh with better transitions */
+        /* Reduce visual flash during refresh with smooth app-level transition */
         .stApp {
             transition: opacity 0.2s ease-in-out;
         }
-        /* Smooth transitions for metrics and dataframes */
+        
+        /* Smooth transitions for ALL dynamic content */
         [data-testid="stMetricValue"],
+        [data-testid="stMetricDelta"],
         [data-testid="stDataFrame"],
-        [data-testid="stCode"] {
+        [data-testid="stTable"],
+        [data-testid="stCode"],
+        [data-testid="stMarkdown"],
+        .stSelectbox,
+        .element-container {
+            transition: opacity 0.15s ease-in-out, transform 0.15s ease-in-out;
+        }
+        
+        /* Prevent layout shift during container updates */
+        .stEmpty {
+            min-height: 1px;
+        }
+        
+        /* Additional stability for metric containers */
+        [data-testid="stMetricLabel"],
+        [data-testid="metric-container"] {
             transition: opacity 0.15s ease-in-out;
         }
-        /* Prevent layout shift during refresh */
-        .element-container {
-            min-height: 1px;
+        
+        /* Smooth transitions for sidebar elements */
+        .sidebar .stSelectbox,
+        .sidebar .stSlider,
+        .sidebar .stCheckbox {
+            transition: opacity 0.15s ease-in-out;
+        }
+        
+        /* Ensure instant scroll behavior for restoration */
+        html, body, [data-testid="stAppViewContainer"], .main, .stApp {
+            scroll-behavior: auto !important;
         }
         </style>
         """,
         unsafe_allow_html=True
     )
     
+    # Inject JavaScript for scroll position preservation using components.html
+    # Uses MutationObserver to detect when Streamlit finishes rendering and then restores scroll
+    scroll_preservation_js = """
+    <script>
+    (function() {
+        const SCROLL_KEY = 'photo_factory_dashboard_scroll';
+        const MAX_RESTORE_ATTEMPTS = 15;
+        
+        // Access parent window (Streamlit's main frame)
+        const parentDoc = window.parent.document;
+        const parentWin = window.parent;
+        
+        // Find the main scrollable container in the parent Streamlit app
+        function getScrollContainer() {
+            // Streamlit's main scrollable container - try multiple selectors
+            const selectors = [
+                '[data-testid="stAppViewContainer"]',
+                '.main .block-container',
+                '.main',
+                '.stApp',
+                'section.main'
+            ];
+            for (const sel of selectors) {
+                const el = parentDoc.querySelector(sel);
+                if (el && el.scrollHeight > el.clientHeight) {
+                    return el;
+                }
+            }
+            return parentDoc.documentElement;
+        }
+        
+        // Save current scroll position to sessionStorage
+        function saveScrollPosition() {
+            try {
+                const container = getScrollContainer();
+                if (container) {
+                    const scrollY = container.scrollTop || parentWin.scrollY || 0;
+                    if (scrollY > 0) {
+                        sessionStorage.setItem(SCROLL_KEY, scrollY.toString());
+                    }
+                }
+            } catch (e) {
+                // Silently fail
+            }
+        }
+        
+        // Restore scroll position with requestAnimationFrame for better timing
+        function restoreScrollPosition(attempts) {
+            attempts = attempts || 0;
+            
+            const savedScroll = sessionStorage.getItem(SCROLL_KEY);
+            if (!savedScroll || parseInt(savedScroll) <= 0) return;
+            
+            const scrollY = parseInt(savedScroll);
+            
+            try {
+                const container = getScrollContainer();
+                if (!container) {
+                    if (attempts < MAX_RESTORE_ATTEMPTS) {
+                        requestAnimationFrame(function() {
+                            restoreScrollPosition(attempts + 1);
+                        });
+                    }
+                    return;
+                }
+                
+                // Use requestAnimationFrame for smooth, properly-timed scroll
+                requestAnimationFrame(function() {
+                    // Scroll the container
+                    container.scrollTop = scrollY;
+                    // Also scroll window as fallback
+                    parentWin.scrollTo({ top: scrollY, behavior: 'instant' });
+                    
+                    // Verify and retry if needed
+                    requestAnimationFrame(function() {
+                        const currentScroll = container.scrollTop || parentWin.scrollY || 0;
+                        if (Math.abs(currentScroll - scrollY) > 50 && attempts < MAX_RESTORE_ATTEMPTS) {
+                            restoreScrollPosition(attempts + 1);
+                        }
+                    });
+                });
+            } catch (e) {
+                // Silently fail
+            }
+        }
+        
+        // Watch for Streamlit content changes using MutationObserver
+        // This helps detect when Streamlit has finished rendering after a rerun
+        function setupMutationObserver() {
+            try {
+                const target = parentDoc.querySelector('[data-testid="stAppViewContainer"]') || 
+                               parentDoc.querySelector('.stApp') ||
+                               parentDoc.body;
+                
+                if (!target) return;
+                
+                let debounceTimer = null;
+                const observer = new MutationObserver(function(mutations) {
+                    // Debounce: wait for mutations to settle, then restore scroll
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(function() {
+                        restoreScrollPosition(0);
+                    }, 50);
+                });
+                
+                observer.observe(target, {
+                    childList: true,
+                    subtree: true,
+                    attributes: false
+                });
+                
+                // Disconnect after 5 seconds to prevent memory leaks
+                setTimeout(function() {
+                    observer.disconnect();
+                }, 5000);
+            } catch (e) {
+                // Silently fail
+            }
+        }
+        
+        // Save scroll position frequently
+        setInterval(saveScrollPosition, 300);
+        
+        // Save on scroll event (throttled)
+        let scrollThrottle = null;
+        try {
+            const container = getScrollContainer();
+            if (container) {
+                container.addEventListener('scroll', function() {
+                    if (!scrollThrottle) {
+                        scrollThrottle = setTimeout(function() {
+                            saveScrollPosition();
+                            scrollThrottle = null;
+                        }, 100);
+                    }
+                }, { passive: true });
+            }
+        } catch (e) {}
+        
+        // Save on visibility change and before unload
+        try {
+            parentDoc.addEventListener('visibilitychange', function() {
+                if (parentDoc.visibilityState === 'hidden') {
+                    saveScrollPosition();
+                }
+            });
+            parentWin.addEventListener('beforeunload', saveScrollPosition);
+        } catch (e) {}
+        
+        // Start restoration immediately and setup observer
+        setupMutationObserver();
+        
+        // Also use timed attempts as fallback
+        restoreScrollPosition(0);
+        setTimeout(function() { restoreScrollPosition(0); }, 50);
+        setTimeout(function() { restoreScrollPosition(0); }, 150);
+        setTimeout(function() { restoreScrollPosition(0); }, 300);
+        setTimeout(function() { restoreScrollPosition(0); }, 500);
+        setTimeout(function() { restoreScrollPosition(0); }, 1000);
+    })();
+    </script>
+    """
+    # Render invisible HTML component that executes the JavaScript
+    components.html(scroll_preservation_js, height=0, scrolling=False)
+    
+    # Static title (no flicker)
     st.title("📸 Photo Factory Dashboard")
     
-    # Service Selector at the top
-    available_services = get_available_services()
-    if available_services:
-        service_options = ["All Services"] + available_services
-        selected_service = st.selectbox(
-            "🔍 **Select Service to View:**",
-            options=service_options,
-            index=0,
-            key="service_selector"
-        )
-    else:
-        selected_service = "All Services"
-        st.warning("No services available")
+    # Create persistent containers at TOP of main() for flicker-free updates
+    header_container = st.empty()
+    st.markdown("---")  # Separator after header
+    overview_container = st.empty()
+    services_container = st.empty()
+    stats_container = st.empty()
+    files_container = st.empty()
+    logs_container = st.empty()
+    # Container for service-specific view
+    service_details_container = st.empty()
     
-    st.markdown("---")
-    
-    # Check database connection
+    # Check database connection (used by multiple sections)
     db_connected = check_database_connection()
+    
+    # Get available services for header and logs
+    available_services = get_available_services()
     
     # Auto-refresh in sidebar (minimal)
     with st.sidebar:
@@ -499,320 +1099,46 @@ def main():
                 key=f"dashboard_refresh_{st.session_state.refresh_key_counter}"
             )
     
-    # Show service-specific or all services data
+    # Render header with resource bar + service selector
+    with header_container.container():
+        selected_service = render_resource_header()
+    
+    # Show service-specific or all services data using containers
     if selected_service == "All Services":
-        # Show overview for all services
-        st.subheader("System Overview")
+        # Clear service details container (not used in All Services view)
+        service_details_container.empty()
         
-        # Infrastructure status
-        infra_col1, infra_col2 = st.columns(2)
-        with infra_col1:
-            db_status = "🟢 Connected" if db_connected else "🔴 Disconnected"
-            st.write(f"**Database:** {db_status}")
+        # Render each section in its container
+        with overview_container.container():
+            render_system_overview(db_connected)
+            st.markdown("---")
         
-        with infra_col2:
-            docker_status = "🟢 Available" if DOCKER_AVAILABLE else "🔴 Unavailable"
-            st.write(f"**Docker:** {docker_status}")
+        with services_container.container():
+            render_all_services_status()
+            st.markdown("---")
         
-        st.markdown("---")
+        with stats_container.container():
+            render_overall_statistics()
+            st.markdown("---")
         
-        # All Services Status
-        st.subheader("All Services Status")
+        with files_container.container():
+            render_latest_files()
+            st.markdown("---")
         
-        # Always use fresh data - caching handles performance
-        services_status = get_all_services_status()
-        
-        if services_status:
-            # Create a table of all services
-            try:
-                import pandas as pd
-            except ImportError:
-                st.error("pandas not available")
-                return
-            
-            status_data = []
-            for svc in services_status:
-                # Determine status indicator
-                if svc["container_running"]:
-                    if svc["container_health"] == "healthy":
-                        status_indicator = "🟢 Healthy"
-                    elif svc["container_health"] == "unhealthy":
-                        status_indicator = "🔴 Unhealthy"
-                    else:
-                        status_indicator = f"🟡 {svc['container_health']}"
-                else:
-                    status_indicator = "🔴 Not Running"
-                
-                # Heartbeat info - always calculate fresh from current time
-                # Format: <elapsed_time>s/<max_interval>s (e.g., 231s/300s or 56s/60s)
-                heartbeat_info = "N/A"
-                if svc["heartbeat"]:
-                    # Map service names to their max expected intervals (in seconds)
-                    service_max_intervals = {
-                        "librarian": 60,      # Updates every 60 seconds
-                        "dashboard": 300,     # Updates every 5 minutes
-                        "factory-db": 300,    # Monitored every 5 minutes
-                        "syncthing": 300,     # Monitored every 5 minutes
-                    }
-                    
-                    # Get service name for interval lookup
-                    service_name = svc.get("service_name")
-                    container_name = svc["name"]
-                    
-                    # Determine max interval based on service name
-                    if service_name and service_name in service_max_intervals:
-                        max_interval = service_max_intervals[service_name]
-                    elif container_name == "factory_postgres":
-                        max_interval = 300  # factory-db
-                    else:
-                        max_interval = 300  # Default to 5 minutes
-                    
-                    time_since = datetime.now() - svc["heartbeat"]["last_heartbeat"]
-                    seconds_ago = int(time_since.total_seconds())
-                    
-                    # Color logic relative to max_interval:
-                    # - <= max_interval: green (within expected interval)
-                    # - <= max_interval * 2: yellow (late but not critical)
-                    # - > max_interval * 2: red (very late, critical)
-                    if seconds_ago <= max_interval:
-                        color = "🟢"
-                    elif seconds_ago <= max_interval * 2:
-                        color = "🟡"
-                    else:
-                        color = "🔴"
-                    
-                    # Format: "231s/300s ago" or "56s/60s ago"
-                    heartbeat_info = f"{color} {seconds_ago}s/{max_interval}s ago"
-                
-                status_data.append({
-                    "Service": svc["name"],
-                    "Status": status_indicator,
-                    "Heartbeat": heartbeat_info,
-                    "Current Task": svc["heartbeat"].get("current_task", "N/A") if svc["heartbeat"] else "N/A",
-                })
-            
-            df = pd.DataFrame(status_data)
-            st.dataframe(df, use_container_width=True, hide_index=True)
-        else:
-            st.info("No services found or Docker unavailable")
-        
-        st.markdown("---")
-        
-        # Overall Statistics - always use fresh data
-        st.subheader("Overall Statistics")
-        stats_container = st.container()
-        with stats_container:
-            col1, col2, col3, col4 = st.columns(4)
-            
-            # Always get fresh data - caching handles performance
-            total_assets = get_total_assets()
-            assets_last_hour = get_assets_last_hour()
-            heartbeat = get_librarian_heartbeat()
-            
-            with col1:
-                st.metric("Total Assets Secured", f"{total_assets:,}")
-            
-            with col2:
-                st.metric("Processed Last Hour", f"{assets_last_hour:,}")
-            
-            with col3:
-                remaining = get_remaining_files()
-                if remaining is not None:
-                    st.metric("Remaining in Inbox", f"{remaining:,}")
-                else:
-                    st.metric("Remaining in Inbox", "N/A")
-            
-            with col4:
-                if heartbeat:
-                    max_interval = 60  # Librarian updates every 60 seconds
-                    time_since = datetime.now() - heartbeat["last_heartbeat"]
-                    seconds_ago = int(time_since.total_seconds())
-                    # Color logic relative to max_interval
-                    if seconds_ago <= max_interval:
-                        st.metric("Librarian Heartbeat", f"🟢 {seconds_ago}s/{max_interval}s ago")
-                    elif seconds_ago <= max_interval * 2:
-                        st.metric("Librarian Heartbeat", f"🟡 {seconds_ago}s/{max_interval}s ago")
-                    else:
-                        st.metric("Librarian Heartbeat", f"🔴 {seconds_ago}s/{max_interval}s ago")
-                else:
-                    st.metric("Librarian Heartbeat", "N/A")
-        
-        st.markdown("---")
-        
-        # Latest Processed Files - use empty container
-        st.subheader("📁 Latest Processed Files")
-        files_container = st.empty()
-        recent_assets = get_recent_assets(limit=10)
-        
-        if recent_assets:
-            try:
-                import pandas as pd
-            except ImportError:
-                files_container.error("pandas not available")
-            else:
-                data = []
-                for asset in recent_assets:
-                    data.append({
-                        "File": asset.get("original_name", "Unknown"),
-                        "Size": f"{asset.get('size_bytes', 0) / 1024 / 1024:.2f} MB",
-                        "Captured": asset.get("captured_at").strftime("%Y-%m-%d %H:%M") if asset.get("captured_at") else "N/A",
-                        "Ingested": asset.get("ingested_at").strftime("%Y-%m-%d %H:%M:%S") if asset.get("ingested_at") else "N/A",
-                        "Path": asset.get("final_path", "N/A")[:50] + "..." if len(asset.get("final_path", "")) > 50 else asset.get("final_path", "N/A"),
-                    })
-                
-                df = pd.DataFrame(data)
-                files_container.dataframe(df, use_container_width=True, hide_index=True)
-        else:
-            files_container.info("No files processed yet")
-        
-        st.markdown("---")
-        
-        # All Services Logs - use empty container
-        st.subheader("📋 All Services Logs")
-        logs_container = st.empty()
-        if DOCKER_AVAILABLE and available_services:
-            all_logs = get_all_logs(available_services, tail=50)
-            if all_logs:
-                log_lines = [line for line in all_logs.split('\n') if line.strip()]
-                recent_logs = '\n'.join(log_lines[-100:])
-                logs_container.code(recent_logs, language=None)
-            else:
-                logs_container.info("No logs available")
-        else:
-            logs_container.warning("Docker unavailable - cannot fetch logs")
+        with logs_container.container():
+            render_all_logs(available_services)
     
     else:
-        # Show service-specific data
-        service_display_name = selected_service.replace("_", " ").replace("-", " ").title()
-        st.subheader(f"📊 {service_display_name} Service Details")
+        # Clear containers not used in service-specific view
+        overview_container.empty()
+        services_container.empty()
+        stats_container.empty()
+        files_container.empty()
+        logs_container.empty()
         
-        # Service Status
-        container_status = get_container_status(selected_service)
-        status_col1, status_col2 = st.columns(2)
-        
-        with status_col1:
-            if container_status:
-                if container_status["running"]:
-                    health = container_status.get("health", "unknown")
-                    if health == "healthy":
-                        st.success(f"🟢 Status: Running (Healthy)")
-                    elif health == "unhealthy":
-                        st.error(f"🔴 Status: Running (Unhealthy)")
-                    else:
-                        st.info(f"🟡 Status: Running ({health})")
-                else:
-                    st.error(f"🔴 Status: {container_status['status']}")
-            else:
-                st.warning("⚠️ Status unavailable")
-        
-        with status_col2:
-            # Get heartbeat if available
-            service_name_for_heartbeat = selected_service.split("_")[0] if "_" in selected_service else selected_service
-            # Map container names to service names
-            if selected_service == "factory_postgres":
-                service_name_for_heartbeat = "factory-db"
-            elif selected_service == "syncthing":
-                service_name_for_heartbeat = "syncthing"  # Explicit mapping for syncthing
-            
-            heartbeat = get_service_heartbeat(service_name_for_heartbeat)
-            
-            # Map service names to their max expected intervals (in seconds)
-            service_max_intervals = {
-                "librarian": 60,      # Updates every 60 seconds
-                "dashboard": 300,     # Updates every 5 minutes
-                "factory-db": 300,    # Monitored every 5 minutes
-                "syncthing": 300,     # Monitored every 5 minutes
-            }
-            
-            if heartbeat:
-                max_interval = service_max_intervals.get(service_name_for_heartbeat, 300)  # Default to 5 minutes
-                time_since = datetime.now() - heartbeat["last_heartbeat"]
-                seconds_ago = int(time_since.total_seconds())
-                # Color logic relative to max_interval
-                if seconds_ago <= max_interval:
-                    st.success(f"💓 Heartbeat: {seconds_ago}s/{max_interval}s ago")
-                elif seconds_ago <= max_interval * 2:
-                    st.warning(f"💓 Heartbeat: {seconds_ago}s/{max_interval}s ago")
-                else:
-                    st.error(f"💓 Heartbeat: {seconds_ago}s/{max_interval}s ago")
-                
-                if heartbeat.get("current_task"):
-                    st.caption(f"Current Task: {heartbeat['current_task']}")
-            else:
-                st.info("No heartbeat data available")
-        
-        st.markdown("---")
-        
-        # Service-specific metrics
-        if "librarian" in selected_service.lower():
-            # Librarian-specific data
-            st.subheader("📈 Librarian Metrics")
-            metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
-            
-            with metric_col1:
-                st.metric("Total Assets Processed", f"{get_total_assets():,}")
-            
-            with metric_col2:
-                st.metric("Processed Last Hour", f"{get_assets_last_hour():,}")
-            
-            with metric_col3:
-                queue_length = get_librarian_queue_length()
-                if queue_length is not None:
-                    st.metric("Queue Length", f"{queue_length:,}")
-                else:
-                    st.metric("Queue Length", "N/A")
-                    st.caption("Not available")
-            
-            with metric_col4:
-                remaining = get_remaining_files()
-                if remaining is not None:
-                    st.metric("Files in Inbox", f"{remaining:,}")
-                else:
-                    st.metric("Files in Inbox", "N/A")
-                    st.caption("Not available")
-            
-            st.markdown("---")
-            
-            # Latest Processed Files by Librarian
-            st.subheader("📁 Latest Processed Files")
-            recent_assets = get_recent_assets(limit=20)
-            
-            if recent_assets:
-                try:
-                    import pandas as pd
-                except ImportError:
-                    st.error("pandas not available")
-                    return
-                
-                data = []
-                for asset in recent_assets:
-                    data.append({
-                        "File": asset.get("original_name", "Unknown"),
-                        "Size": f"{asset.get('size_bytes', 0) / 1024 / 1024:.2f} MB",
-                        "Captured": asset.get("captured_at").strftime("%Y-%m-%d %H:%M") if asset.get("captured_at") else "N/A",
-                        "Ingested": asset.get("ingested_at").strftime("%Y-%m-%d %H:%M:%S") if asset.get("ingested_at") else "N/A",
-                        "Path": asset.get("final_path", "N/A")[:50] + "..." if len(asset.get("final_path", "")) > 50 else asset.get("final_path", "N/A"),
-                    })
-                
-                df = pd.DataFrame(data)
-                st.dataframe(df, use_container_width=True, hide_index=True)
-            else:
-                st.info("No files processed yet")
-        
-        st.markdown("---")
-        
-        # Service Logs
-        st.subheader(f"📋 {service_display_name} Logs")
-        if DOCKER_AVAILABLE:
-            logs = get_service_logs(selected_service, tail=200)
-            if logs:
-                log_lines = logs.strip().split('\n')
-                recent_logs = '\n'.join(log_lines[-100:])  # Show last 100 lines
-                st.code(recent_logs, language=None)
-            else:
-                st.info(f"No logs available for {selected_service}")
-        else:
-            st.warning("Docker unavailable - cannot fetch logs")
+        # Render service-specific details in its container
+        with service_details_container.container():
+            render_service_details(selected_service)
 
 
 if __name__ == "__main__":

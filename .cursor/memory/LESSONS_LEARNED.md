@@ -1,6 +1,6 @@
 # Lessons Learned
 
-**Last Updated:** 2026-01-03  
+**Last Updated:** 2026-01-10  
 **Purpose:** Technical patterns, gotchas, and operational wisdom discovered during development
 
 ---
@@ -215,6 +215,63 @@ librarian:
 
 ---
 
+### 7. Phantom File Edits (Agent Handoff Issue)
+
+**Date:** 2026-01-10
+**Problem:** During Docker validation, build failed because `psutil` was missing from `requirements.txt`. The `read_file` tool showed psutil at line 29, but terminal `cat requirements.txt` showed the file didn't actually contain psutil. Previous agent edits appeared successful but never persisted to disk.
+
+**Root Cause:** IDE tools (`search_replace`, `write`) may report success but fail to write to disk due to:
+- File locks (another process has the file open)
+- Permission issues
+- File system sync delays
+- Cursor's internal state differing from disk state
+
+**Solution:** After ANY file modification, verify the change exists on disk using a terminal command:
+```powershell
+# Windows
+Get-Content requirements.txt | Select-String "psutil"
+
+# If found, output shows the line
+# If NOT found, output is empty - edit didn't persist!
+```
+
+**Prevention:**
+- Always verify file edits via terminal before marking tasks complete
+- Never trust `read_file` alone - it may show cached/uncommitted state
+- Add verification steps to closeout checklist (see `.cursorrules` Section 1.4)
+
+**Related Change:** Added "Terminal Verification Protocol" to `.cursorrules` Section 3.2
+
+---
+
+### 8. Test Fixture Consistency Across Classes
+
+**Date:** 2026-01-10
+**Problem:** Docker build tests failed with 2 edge case tests returning 0.0 instead of expected values. Root cause was `TestResourceMetricsEdgeCases` class missing the `clear_cache` fixture that other test classes in the same file had.
+
+**Root Cause:** When adding new test classes to existing files, agents didn't check what fixtures sibling classes used. The Streamlit cache wasn't being cleared between tests, causing mocked values to be ignored.
+
+**Solution:** Added `clear_cache` fixture to the test class:
+```python
+@pytest.fixture(autouse=True)
+def clear_cache(self):
+    try:
+        from Src.Dashboard.dashboard import get_system_resources
+        get_system_resources.clear()
+    except (ImportError, AttributeError):
+        pass
+    yield
+```
+
+**Prevention:**
+- Before adding test classes, audit existing classes for fixtures
+- Copy fixtures from sibling classes unless intentionally different
+- Add comments explaining why fixtures are omitted if intentional
+
+**Related Change:** Added "Test Class Consistency Rule" to `.cursorrules` Section 4.1
+
+---
+
 ## Testing Patterns
 
 ### 1. Sandbox Testing Rule
@@ -324,4 +381,9 @@ Press 'C' in terminal or click "Clear Cache" in sidebar.
 ---
 
 **END OF LESSONS LEARNED**
+
+
+
+
+
 
