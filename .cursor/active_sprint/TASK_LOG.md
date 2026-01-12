@@ -246,4 +246,59 @@ Complete Docker validation for Workstream 6.0 (Flicker-Free Resource Monitoring)
 
 ---
 
+## 2026-01-11 - Epic 6 WS 6.0 Scroll Position Preservation
+
+### Session Goal
+Fix dashboard page scroll-to-top issue during auto-refresh.
+
+### Tasks Completed
+
+#### [Epic 6 > WS 6.0] Scroll Position Preservation ✅
+
+**Problem:** During auto-refresh, the dashboard page would scroll back to the top, causing user to lose their place when viewing logs or other bottom-of-page content.
+
+**Root Cause:** Streamlit's `st_autorefresh` triggers a full `st.rerun()` which re-executes the entire Python script and rebuilds the page from scratch, resetting scroll position.
+
+**Solution Implemented:**
+1. Added JavaScript scroll position preservation using `st.components.v1.html()`
+2. JavaScript runs in an iframe that accesses the parent Streamlit frame
+3. Saves scroll position:
+   - Every 300ms via `setInterval()`
+   - On scroll events (throttled)
+   - On visibility change (tab switch)
+   - Before page unload
+4. Restores scroll position:
+   - Uses `MutationObserver` to detect when Streamlit finishes rendering
+   - Multiple retry attempts with `requestAnimationFrame` for proper timing
+   - Scrolls both container and window for robustness
+
+**Files Modified:**
+- `Src/Dashboard/dashboard.py`:
+  - Added `import streamlit.components.v1 as components`
+  - Added scroll preservation JavaScript (~140 lines)
+  - JavaScript uses parent window access to control main scroll container
+
+### Verification
+- [x] File edits verified via terminal (git status)
+- [x] Tests pass: 82 passed, 4 skipped (docker build gate)
+- [x] Docker build: SUCCESS
+- [x] Container restart: SUCCESS
+- [x] No JavaScript errors in browser console (only standard Streamlit warnings)
+
+### Git Commit
+- Hash: ca8c196
+- Message: "feat: add scroll position preservation during auto-refresh"
+- Pushed to: origin/master
+
+### Known Limitations
+- Scroll restoration may have slight delay due to Streamlit's async rendering
+- Works by saving/restoring from sessionStorage, so scroll position persists within browser session
+
+### Next Agent Notes
+- Scroll preservation is now implemented for the dashboard
+- The solution is the best approach within Streamlit's architecture
+- For more precise scroll control, a custom Streamlit component would be needed
+
+---
+
 **END OF TASK LOG**

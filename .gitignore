@@ -9,9 +9,14 @@
 # Data Directories (User-generated content)
 Stack/App_Data/immich-data/
 Stack/App_Data/postgres-data/
+Stack/App_Data/factory-db-data/
+Stack/App_Data/syncthing_config/
 Photos_Inbox/
 Photos_Gallery/
 Storage/
+
+# Exported/Generated folders
+cursor-memory-bank-export/
 
 # Homepage config (may contain sensitive data)
 Stack/App_Data/homepage/
