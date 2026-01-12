@@ -9,6 +9,7 @@ from typing import Optional
 import docker
 import psutil
 import streamlit as st
+import streamlit.components.v1 as components
 from sqlalchemy import func
 from streamlit_autorefresh import st_autorefresh
 
@@ -820,12 +821,9 @@ def main():
     if heartbeat_service is None:
         logger.warning("Dashboard heartbeat service failed to initialize")
     
-    # Set page title and add CSS for smooth transitions (eliminates flicker)
+    # Add CSS for smooth transitions
     st.markdown(
         """
-        <script>
-        document.title = "Photo Factory Dashboard";
-        </script>
         <style>
         /* Reduce visual flash during refresh with smooth app-level transition */
         .stApp {
@@ -861,10 +859,180 @@ def main():
         .sidebar .stCheckbox {
             transition: opacity 0.15s ease-in-out;
         }
+        
+        /* Ensure instant scroll behavior for restoration */
+        html, body, [data-testid="stAppViewContainer"], .main, .stApp {
+            scroll-behavior: auto !important;
+        }
         </style>
         """,
         unsafe_allow_html=True
     )
+    
+    # Inject JavaScript for scroll position preservation using components.html
+    # Uses MutationObserver to detect when Streamlit finishes rendering and then restores scroll
+    scroll_preservation_js = """
+    <script>
+    (function() {
+        const SCROLL_KEY = 'photo_factory_dashboard_scroll';
+        const MAX_RESTORE_ATTEMPTS = 15;
+        
+        // Access parent window (Streamlit's main frame)
+        const parentDoc = window.parent.document;
+        const parentWin = window.parent;
+        
+        // Find the main scrollable container in the parent Streamlit app
+        function getScrollContainer() {
+            // Streamlit's main scrollable container - try multiple selectors
+            const selectors = [
+                '[data-testid="stAppViewContainer"]',
+                '.main .block-container',
+                '.main',
+                '.stApp',
+                'section.main'
+            ];
+            for (const sel of selectors) {
+                const el = parentDoc.querySelector(sel);
+                if (el && el.scrollHeight > el.clientHeight) {
+                    return el;
+                }
+            }
+            return parentDoc.documentElement;
+        }
+        
+        // Save current scroll position to sessionStorage
+        function saveScrollPosition() {
+            try {
+                const container = getScrollContainer();
+                if (container) {
+                    const scrollY = container.scrollTop || parentWin.scrollY || 0;
+                    if (scrollY > 0) {
+                        sessionStorage.setItem(SCROLL_KEY, scrollY.toString());
+                    }
+                }
+            } catch (e) {
+                // Silently fail
+            }
+        }
+        
+        // Restore scroll position with requestAnimationFrame for better timing
+        function restoreScrollPosition(attempts) {
+            attempts = attempts || 0;
+            
+            const savedScroll = sessionStorage.getItem(SCROLL_KEY);
+            if (!savedScroll || parseInt(savedScroll) <= 0) return;
+            
+            const scrollY = parseInt(savedScroll);
+            
+            try {
+                const container = getScrollContainer();
+                if (!container) {
+                    if (attempts < MAX_RESTORE_ATTEMPTS) {
+                        requestAnimationFrame(function() {
+                            restoreScrollPosition(attempts + 1);
+                        });
+                    }
+                    return;
+                }
+                
+                // Use requestAnimationFrame for smooth, properly-timed scroll
+                requestAnimationFrame(function() {
+                    // Scroll the container
+                    container.scrollTop = scrollY;
+                    // Also scroll window as fallback
+                    parentWin.scrollTo({ top: scrollY, behavior: 'instant' });
+                    
+                    // Verify and retry if needed
+                    requestAnimationFrame(function() {
+                        const currentScroll = container.scrollTop || parentWin.scrollY || 0;
+                        if (Math.abs(currentScroll - scrollY) > 50 && attempts < MAX_RESTORE_ATTEMPTS) {
+                            restoreScrollPosition(attempts + 1);
+                        }
+                    });
+                });
+            } catch (e) {
+                // Silently fail
+            }
+        }
+        
+        // Watch for Streamlit content changes using MutationObserver
+        // This helps detect when Streamlit has finished rendering after a rerun
+        function setupMutationObserver() {
+            try {
+                const target = parentDoc.querySelector('[data-testid="stAppViewContainer"]') || 
+                               parentDoc.querySelector('.stApp') ||
+                               parentDoc.body;
+                
+                if (!target) return;
+                
+                let debounceTimer = null;
+                const observer = new MutationObserver(function(mutations) {
+                    // Debounce: wait for mutations to settle, then restore scroll
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(function() {
+                        restoreScrollPosition(0);
+                    }, 50);
+                });
+                
+                observer.observe(target, {
+                    childList: true,
+                    subtree: true,
+                    attributes: false
+                });
+                
+                // Disconnect after 5 seconds to prevent memory leaks
+                setTimeout(function() {
+                    observer.disconnect();
+                }, 5000);
+            } catch (e) {
+                // Silently fail
+            }
+        }
+        
+        // Save scroll position frequently
+        setInterval(saveScrollPosition, 300);
+        
+        // Save on scroll event (throttled)
+        let scrollThrottle = null;
+        try {
+            const container = getScrollContainer();
+            if (container) {
+                container.addEventListener('scroll', function() {
+                    if (!scrollThrottle) {
+                        scrollThrottle = setTimeout(function() {
+                            saveScrollPosition();
+                            scrollThrottle = null;
+                        }, 100);
+                    }
+                }, { passive: true });
+            }
+        } catch (e) {}
+        
+        // Save on visibility change and before unload
+        try {
+            parentDoc.addEventListener('visibilitychange', function() {
+                if (parentDoc.visibilityState === 'hidden') {
+                    saveScrollPosition();
+                }
+            });
+            parentWin.addEventListener('beforeunload', saveScrollPosition);
+        } catch (e) {}
+        
+        // Start restoration immediately and setup observer
+        setupMutationObserver();
+        
+        // Also use timed attempts as fallback
+        restoreScrollPosition(0);
+        setTimeout(function() { restoreScrollPosition(0); }, 50);
+        setTimeout(function() { restoreScrollPosition(0); }, 150);
+        setTimeout(function() { restoreScrollPosition(0); }, 300);
+        setTimeout(function() { restoreScrollPosition(0); }, 500);
+        setTimeout(function() { restoreScrollPosition(0); }, 1000);
+    })();
+    </script>
+    """
+    # Render invisible HTML component that executes the JavaScript
+    components.html(scroll_preservation_js, height=0, scrolling=False)
     
     # Static title (no flicker)
     st.title("📸 Photo Factory Dashboard")
